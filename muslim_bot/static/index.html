@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Muslim Bot Admin</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Muslim Bot</h1>
+        <p id="statusLine">Checking service status</p>
+      </div>
+      <div class="token-box">
+        <label for="adminToken">Admin token</label>
+        <input id="adminToken" type="password" autocomplete="off" />
+        <button id="rememberToken" type="button">Remember</button>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Primary">
+      <button class="tab active" type="button" data-view="chatView">Chat</button>
+      <button class="tab" type="button" data-view="configView">Config</button>
+      <button class="tab" type="button" data-view="mcpView">MCP</button>
+      <button class="tab" type="button" data-view="deployView">Deploy</button>
+    </nav>
+
+    <main>
+      <section id="chatView" class="view active">
+        <div class="section-head">
+          <h2>Chat Smoke Test</h2>
+          <button id="sendChat" type="button">Send</button>
+        </div>
+        <textarea id="chatInput" rows="4">hadis tentang niat</textarea>
+        <pre id="chatOutput" class="output"></pre>
+      </section>
+
+      <section id="configView" class="view">
+        <div class="section-head">
+          <h2>LLM Connection</h2>
+          <div class="actions">
+            <button id="reloadConfig" type="button">Reload</button>
+            <button id="saveConfig" type="button">Save</button>
+          </div>
+        </div>
+        <div class="form-grid">
+          <label>
+            Provider
+            <select id="llmProvider">
+              <option value="openai">OpenAI compatible</option>
+            </select>
+          </label>
+          <label>
+            Model
+            <input id="llmModel" type="text" />
+          </label>
+          <label>
+            Base URL
+            <input id="llmBaseUrl" type="url" placeholder="https://api.openai.com/v1" />
+          </label>
+          <label>
+            API key
+            <input id="llmApiKey" type="password" autocomplete="off" />
+          </label>
+          <label>
+            Organization
+            <input id="llmOrganization" type="text" />
+          </label>
+          <label>
+            Project
+            <input id="llmProject" type="text" />
+          </label>
+          <label>
+            Agent timeout
+            <input id="agentTimeout" type="number" min="1" />
+          </label>
+          <label>
+            Session turns
+            <input id="sessionTurns" type="number" min="1" />
+          </label>
+        </div>
+      </section>
+
+      <section id="mcpView" class="view">
+        <div class="section-head">
+          <h2>MCP Servers</h2>
+          <div class="actions">
+            <button id="addMcp" type="button">Add</button>
+            <button id="testMcp" type="button">Test</button>
+          </div>
+        </div>
+        <div id="mcpList" class="server-list"></div>
+        <pre id="mcpOutput" class="output"></pre>
+      </section>
+
+      <section id="deployView" class="view">
+        <div class="section-head">
+          <h2>OpenClaw VPS</h2>
+          <button id="copyDeploy" type="button">Copy</button>
+        </div>
+        <pre id="deployCommands" class="output">cd /opt/ydgi
+cp muslim_bot/.env.example muslim_bot/.env
+docker compose -f muslim_bot/deploy/docker-compose.openclaw.yml up -d --build
+ssh -L 8000:127.0.0.1:8000 user@your-vps</pre>
+      </section>
+    </main>
+
+    <template id="mcpTemplate">
+      <article class="server">
+        <div class="server-head">
+          <label class="inline">
+            <input class="mcp-enabled" type="checkbox" />
+            Enabled
+          </label>
+          <button class="remove-server" type="button">Remove</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            ID
+            <input class="mcp-id" type="text" />
+          </label>
+          <label>
+            Name
+            <input class="mcp-name" type="text" />
+          </label>
+          <label>
+            Transport
+            <select class="mcp-transport">
+              <option value="stdio">stdio</option>
+              <option value="streamable_http">streamable_http</option>
+              <option value="sse">sse</option>
+            </select>
+          </label>
+          <label>
+            Command
+            <input class="mcp-command" type="text" />
+          </label>
+          <label class="wide">
+            Args, one per line
+            <textarea class="mcp-args" rows="3"></textarea>
+          </label>
+          <label>
+            Working directory
+            <input class="mcp-cwd" type="text" />
+          </label>
+          <label>
+            URL
+            <input class="mcp-url" type="url" />
+          </label>
+          <label>
+            Timeout seconds
+            <input class="mcp-timeout" type="number" min="1" />
+          </label>
+          <label>
+            SSE read timeout
+            <input class="mcp-sse-timeout" type="number" min="1" />
+          </label>
+          <label>
+            Approval
+            <select class="mcp-approval">
+              <option value="never">never</option>
+              <option value="always">always</option>
+            </select>
+          </label>
+          <label class="inline">
+            <input class="mcp-structured" type="checkbox" />
+            Structured content
+          </label>
+          <label class="wide">
+            Env JSON
+            <textarea class="mcp-env" rows="5"></textarea>
+          </label>
+          <label class="wide">
+            Headers JSON
+            <textarea class="mcp-headers" rows="5"></textarea>
+          </label>
+        </div>
+      </article>
+    </template>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

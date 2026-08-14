@@ -1,0 +1,43 @@
+services:
+  muslim-bot:
+    build:
+      context: ../..
+      dockerfile: muslim_bot/deploy/Dockerfile
+    image: muslim-bot:openclaw
+    container_name: muslim-bot
+    restart: unless-stopped
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_ORGANIZATION: ${OPENAI_ORGANIZATION:-}
+      OPENAI_PROJECT: ${OPENAI_PROJECT:-}
+      RUNTIME_CONFIG_PATH: /app/data/runtime_config.json
+      QURAN_SOURCE_DB_PATH: /app/seed/quran.db
+      QURAN_DB_PATH: /app/data/quran.db
+      HADITH_DB_PATH: /app/data/hadith.db
+      QURAN_MCP_COMMAND: /app/bin/quran-mcp
+      QURAN_MCP_ARGS: ""
+      QURAN_MCP_CWD: /app
+      HADITH_MCP_COMMAND: /app/bin/hadith-mcp
+      HADITH_MCP_ARGS: ""
+      HADITH_MCP_CWD: /app/hadith-api-go-run
+      HADITH_SEEDER_COMMAND: /app/bin/hadith-seeder
+      HADITH_SEEDER_ARGS: ""
+      HADITH_SEEDER_CWD: /app/hadith-api-go-run
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - muslim_bot_data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+volumes:
+  muslim_bot_data:
