@@ -113,7 +113,10 @@ Dua ide diuji dengan data sebelum diterapkan. Dalil target dipilih oleh saya
 | RRF | 4 | 6 | 12 |
 
 - Diterapkan: semantik selalu jalan paralel dengan pencarian kata, hasil
-  digabung selang-seling (`interleave_passages`), maksimal 12 per sumber.
+  digabung selang-seling (`interleave_passages`), maksimal 12 per sumber
+  (nilai saat itu; sejak Langkah 9: kandidat tetap 12 via
+  `MAX_CANDIDATES_PER_SOURCE`, konteks final dipotong 5 per sumber via
+  `MAX_CONTEXT_PER_SOURCE`).
   Retrieval total terukur 0,37-0,63 dtk pada kondisi hangat (8 pertanyaan).
 - Dibuang: `weak_kinds` dan `merge_passages` (tidak dipakai lagi).
 - Keputusan pemilik produk: tidak perlu mengeluarkan dalil yang persis sama
@@ -207,6 +210,36 @@ Sebelumnya retrieval hanya memakai pesan terbaru, jadi "jelaskan ayat tadi" atau
   dijalankan di sini). Yang diuji: logika build/resume/berhenti, pemuatan indeks,
   dan konfigurasi, lewat test.
 
+### Langkah 9: FTS5 gantikan LIKE + cap konteks 5 per sumber
+Tindak lanjut dari rencana kecepatan (poin 1-2 diskusi RAG). Dua perubahan,
+146 test tetap hijau:
+
+- **Keyword kini BM25 via FTS5 (`muslim_bot/fts.py`), fallback LIKE.**
+  `hadith_fts` bawaan seeder dipakai langsung bila ada; jika tidak, sidecar
+  `<stem>_fts.db` dibangun sekali di sebelah source DB (tidak pernah menulis
+  ke DB Go-managed) dan dipakai ulang selama mtime+size sumber sama.
+  Varian stemming lama jadi prefix FTS (`"jujur"*` cocok `kejujuran`, tapi
+  `riba*` tetap tidak cocok `beribadah` karena tokenisasi batas kata).
+  Ranking BM25 menggantikan `count-match + length`.
+  Ukur pada 6.236 ayat, query 3 keyword: LIKE 40,9 ms -> FTS hangat 13,0 ms
+  (~3x). Query 1 keyword kecil kurang lebih sama. Build sidecar sekali
+  ~60-140 ms, lalu reuse antar proses. Tanpa FTS5 di SQLite, otomatis
+  kembali ke LIKE.
+- **Kandidat vs konteks dipisah.** `MAX_CANDIDATES_PER_SOURCE=12` (depth ambil,
+  semantik tetap 12 seperti Langkah 4) vs `MAX_CONTEXT_PER_SOURCE=5` (final
+  ke LLM). Keyword tetap top-4, semantik 12, interleave potong 5/kind:
+  konteks max 24 -> max 10 passages (~3.200 -> ~1.000 chars, -70% token
+  prompt). Ini sumber utama percepatan end-to-end (LLM lebih sedikit
+  membaca), bukan sekadar kualitas.
+- Tradeoff sadar: recall `@12` eval mengukur depth kandidat (tetap 12),
+  tapi LLM kini hanya melihat 5/kind. Bila eval nanti menunjukkan target
+  sering di rank 6-12 kandidat, jangan naikkan cap mentah-mentah —
+  tambahkan rerank ringan sebelum potong 5 (lihat poin 5).
+- Operasional: sidecar butuh folder source DB writable. `QURAN_DB_PATH` /
+  `HADITH_DB_PATH` menunjuk ke file yang dipakai; sidecar ikut di folder itu.
+  Tidak perlu reindex semantik (input embedding dan dims tidak berubah;
+  `semantic.db` 6.236 + 34.186 vektor @512 dims tetap valid).
+
 ## 4. Hasil
 
 Sampel kecil (6 pertanyaan baru per kondisi, model yang sama saat dibandingkan).
@@ -231,8 +264,12 @@ saat dalil tidak ditemukan). Belum ada evaluasi sistematis.
 ## 5. Berkas yang berubah atau ditambah
 
 - Baru: `retrieval.py`, `semantic.py`, `semantic_index.py`, `hadith_repair.py`,
-  `tests/test_hadith_repair.py`,
+  `fts.py`, `tests/test_hadith_repair.py`,
   `tests/test_retrieval.py`, `tests/test_semantic.py`, dokumen ini.
+- Diubah: `agent.py`, `config.py`, `.env.example`, `requirements.txt` (numpy),
+  `tests/test_agent.py`, `tests/test_streaming.py`.
+  `retrieval.py` (Langkah 9: konstanta kandidat/konteks, cabang FTS+LIKE),
+  `semantic.py` (Langkah 9: `_rank` memakai `MAX_CANDIDATES_PER_SOURCE`).
 - Diubah: `agent.py`, `config.py`, `.env.example`, `requirements.txt` (numpy),
   `tests/test_agent.py`, `tests/test_streaming.py`.
 - Tambahan: `eval/` (dataset dan skrip evaluasi retrieval).
@@ -256,7 +293,9 @@ saat dalil tidak ditemukan). Belum ada evaluasi sistematis.
 - Jawaban pipeline tidak menyertakan teks Arab.
 - Retrieval masih lemah untuk pertanyaan topikal pendek. Pada evaluasi 19 kasus,
   dalil target masuk 12 kandidat hanya 4/19 (typed) dan 6/19 (neutral); jauh
-  lebih baik (12/19) bila pertanyaan menggambarkan isi dalil. Sebagian karena
+  lebih baik (12/19) bila pertanyaan menggambarkan isi dalil. Sejak Langkah 9
+  depth kandidat tetap 12 tetapi LLM hanya melihat 5/kind, jadi angka `@12`
+  eval = batas atas kandidat, bukan yang dibaca model. Sebagian karena
   pertanyaan seperti "ayat tentang sabar" punya puluhan dalil yang sama benarnya,
   jadi satu dalil target adalah ukuran yang ketat. Hadits yang diriwayatkan
   dengan banyak jalur juga bersaing satu sama lain (contoh: Bukhari #1 niat).
@@ -274,6 +313,9 @@ saat dalil tidak ditemukan). Belum ada evaluasi sistematis.
 Urut prioritas.
 
 0. ~~Pertanyaan lanjutan~~ dan ~~kesiapan deploy indeks semantik~~ Selesai (Langkah 7 dan 8).
+0a. ~~Keyword BM25 + cap konteks~~ Selesai (Langkah 9): FTS5 gantikan LIKE
+    (~3x pada query multi-keyword), konteks final 5/kind (-70% token prompt).
+    Sisa terkait: tidak perlu reindex semantik; sidecar FTS auto-build.
 1. ~~Embed query yang sudah dibersihkan~~ Sudah diuji dan ditolak (lihat Langkah 4).
 2. ~~Perbanyak kandidat semantik~~ Selesai: 12 per sumber.
 3. ~~Set evaluasi retrieval~~ Selesai (Langkah 5).
