@@ -1,4 +1,4 @@
-# Muslim Bot
+# Islamic Daris Bot
 
 AI agent for Islamic source lookup and educational answers in Indonesian. It uses configurable MCP servers for Quran and Hadith source access:
 
@@ -51,9 +51,22 @@ curl -X POST http://localhost:8000/chat \
   -d '{"message":"hadis tentang niat"}'
 ```
 
+Streaming (Server-Sent Events with `delta`, `tool`, `done`, and `error` events):
+
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H 'content-type: application/json' \
+  -d '{"message":"hadis tentang niat"}'
+```
+
 ## Behavior
 
-Muslim Bot is educational by default. It searches the Quran/Hadith MCP tools for religious claims, cites references in the answer, and avoids presenting itself as a mufti or issuing formal fatwas.
+Islamic Daris Bot is educational by default. It searches the Quran/Hadith MCP tools for religious claims, cites references in the answer, and avoids presenting itself as a mufti or issuing formal fatwas.
+
+Direct lookups (a hadith number, a `surah:ayah` reference, "ayat kursi", or a
+random verse request) are answered straight from the local databases without
+touching the LLM. Complete agent answers to first-time questions are cached in
+the local database (`CHAT_CACHE_ENABLED`, `ANSWER_CACHE_TTL_DAYS`).
 
 ## OpenClaw VPS
 

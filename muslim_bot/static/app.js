@@ -81,7 +81,9 @@ function renderLlm(config) {
   $("#llmApiKey").value = config.llm.api_key || "";
   $("#llmOrganization").value = config.llm.organization || "";
   $("#llmProject").value = config.llm.project || "";
+  $("#llmUseResponses").checked = config.llm.use_responses !== false;
   $("#agentTimeout").value = config.agent_timeout_seconds;
+  $("#agentMaxTurns").value = config.agent_max_turns;
   $("#sessionTurns").value = config.session_max_turns;
 }
 
@@ -114,6 +116,9 @@ function renderMcp(config) {
 }
 
 function gatherConfig() {
+  if (!state.config) {
+    throw new Error("Config belum dimuat. Isi admin token lalu klik Reload di tab Config.");
+  }
   const config = structuredClone(state.config);
   config.llm = {
     provider: $("#llmProvider").value,
@@ -122,9 +127,10 @@ function gatherConfig() {
     api_key: $("#llmApiKey").value.trim() || null,
     organization: $("#llmOrganization").value.trim() || null,
     project: $("#llmProject").value.trim() || null,
-    use_responses: null,
+    use_responses: $("#llmUseResponses").checked,
   };
   config.agent_timeout_seconds = Number($("#agentTimeout").value);
+  config.agent_max_turns = Number($("#agentMaxTurns").value);
   config.session_max_turns = Number($("#sessionTurns").value);
   config.mcp_servers = $$(".server").map((node) => ({
     id: $(".mcp-id", node).value.trim(),
@@ -191,6 +197,9 @@ function addServer() {
 async function testMcp() {
   const output = $("#mcpOutput");
   output.textContent = "Testing MCP servers...";
+  if (!state.config) {
+    await loadConfig();
+  }
   await saveConfig();
   const body = await requestJson("/api/mcp/test", {
     method: "POST",
@@ -201,18 +210,83 @@ async function testMcp() {
 
 async function sendChat() {
   const output = $("#chatOutput");
-  output.textContent = "Waiting for answer...";
-  const body = await requestJson("/chat", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      message: $("#chatInput").value,
-      session_id: state.sessionId,
-      language: "id",
-    }),
-  });
-  state.sessionId = body.session_id;
-  output.textContent = body.answer + "\n\n" + pretty({ references: body.references, used_tools: body.used_tools });
+  const status = $("#chatStatus");
+  output.textContent = "";
+  status.textContent = "Menghubungi bot…";
+  let response;
+  try {
+    response = await fetch("/chat/stream", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        message: $("#chatInput").value,
+        session_id: state.sessionId,
+        language: "id",
+      }),
+    });
+  } catch (error) {
+    status.textContent = "";
+    output.textContent = error.message;
+    return;
+  }
+  if (!response.ok || !response.body) {
+    let detail = response.statusText;
+    try {
+      const body = await response.json();
+      detail = body.detail || detail;
+    } catch {
+      /* keep status text */
+    }
+    status.textContent = "";
+    output.textContent = `Error ${response.status}: ${detail}`;
+    return;
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let answer = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let index;
+      while ((index = buffer.indexOf("\n\n")) >= 0) {
+        const raw = buffer.slice(0, index);
+        buffer = buffer.slice(index + 2);
+        let event = "message";
+        const dataParts = [];
+        for (const line of raw.split("\n")) {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          else if (line.startsWith("data:")) dataParts.push(line.slice(5).trim());
+        }
+        if (!dataParts.length) continue;
+        let payload = {};
+        try {
+          payload = JSON.parse(dataParts.join("\n"));
+        } catch {
+          continue;
+        }
+        if (event === "delta") {
+          answer += payload.text || "";
+          output.textContent = answer;
+          status.textContent = "✍ Menyusun jawaban…";
+        } else if (event === "tool") {
+          status.textContent = `🔍 ${payload.name || "tool"}…`;
+        } else if (event === "done") {
+          state.sessionId = payload.session_id;
+          output.textContent = payload.answer + "\n\n" + pretty({ references: payload.references, used_tools: payload.used_tools });
+          const warnings = payload.warnings || [];
+          status.textContent = warnings.length ? `⚠ ${warnings.join("; ")}` : "Selesai ✓";
+        } else if (event === "error") {
+          status.textContent = "";
+          output.textContent = `Error: ${payload.detail || "unknown"}`;
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 function switchView(viewId) {
@@ -224,6 +298,7 @@ function wireEvents() {
   $$(".tab").forEach((tab) => tab.addEventListener("click", () => switchView(tab.dataset.view)));
   $("#rememberToken").addEventListener("click", () => {
     localStorage.setItem("muslim_bot_admin_token", $("#adminToken").value);
+    loadConfig().catch((error) => alert(error.message));
   });
   $("#reloadConfig").addEventListener("click", () => loadConfig().catch((error) => alert(error.message)));
   $("#saveConfig").addEventListener("click", () => saveConfig().catch((error) => alert(error.message)));

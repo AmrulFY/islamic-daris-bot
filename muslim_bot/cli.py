@@ -20,7 +20,10 @@ async def _ask_once(message: str, session_id: str | None = None) -> int:
     else:
         runtime_config = RuntimeConfigStore(settings).load()
 
-    store = SessionStore(max_turns=runtime_config.session_max_turns)
+    store = SessionStore(
+        max_turns=runtime_config.session_max_turns,
+        db_path=settings.session_db_path,
+    )
     active_session_id = store.ensure_session(session_id)
     runner = MuslimBotRunner(settings=settings)
     reply = await runner.ask(
@@ -42,11 +45,14 @@ async def _interactive() -> int:
     else:
         runtime_config = RuntimeConfigStore(settings).load()
 
-    store = SessionStore(max_turns=runtime_config.session_max_turns)
+    store = SessionStore(
+        max_turns=runtime_config.session_max_turns,
+        db_path=settings.session_db_path,
+    )
     session_id = store.new_session_id()
     runner = MuslimBotRunner(settings=settings)
 
-    print("MuslimBot siap. Ketik 'exit' untuk keluar.")
+    print("Islamic Daris Bot siap. Ketik 'exit' untuk keluar.")
     while True:
         try:
             message = input("> ").strip()
@@ -67,7 +73,7 @@ async def _interactive() -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Chat with MuslimBot.")
+    parser = argparse.ArgumentParser(description="Chat with Islamic Daris Bot.")
     parser.add_argument("--once", help="Ask one question and exit.")
     parser.add_argument("--session-id", help="Optional session id for --once.")
     args = parser.parse_args(argv)

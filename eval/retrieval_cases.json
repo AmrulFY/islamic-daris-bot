@@ -1,0 +1,195 @@
+{
+  "_notes": [
+    "Cases come from the user's 20-reference list. Quran ids are 'surah:ayah'; any listed id counts as a hit.",
+    "Hadith ids are '<book name> #<number in OUR database>'. Bukhari numbers match the usual numbering.",
+    "Sahih Muslim numbers in the database differ from the usual ones, so items 14, 15 and 19 were mapped by content (#6643/#6644, #6853, #283/#284).",
+    "Item 11 (Muslim 2999, sabar dan syukur) could not be found in the database; it is kept with no expected ids and excluded from scoring.",
+    "'gist' is the 'Inti relevansi' column of the user's table; used as a third, meaning-based phrasing."
+  ],
+  "cases": [
+    {
+      "n": 1,
+      "topic": "Sabar",
+      "kind": "quran",
+      "expected": [
+        "2:153"
+      ],
+      "gist": "Memohon pertolongan dengan sabar dan salat."
+    },
+    {
+      "n": 2,
+      "topic": "Menghadapi musibah",
+      "kind": "quran",
+      "expected": [
+        "2:155",
+        "2:156",
+        "2:157"
+      ],
+      "gist": "Ujian hidup, kesabaran, dan respons terhadap musibah."
+    },
+    {
+      "n": 3,
+      "topic": "Ketenangan hati",
+      "kind": "quran",
+      "expected": [
+        "13:28"
+      ],
+      "gist": "Mengingat Allah dan ketenteraman hati."
+    },
+    {
+      "n": 4,
+      "topic": "Tidak berputus asa",
+      "kind": "quran",
+      "expected": [
+        "39:53"
+      ],
+      "gist": "Larangan berputus asa dari rahmat Allah."
+    },
+    {
+      "n": 5,
+      "topic": "Tawakal",
+      "kind": "quran",
+      "expected": [
+        "65:2",
+        "65:3"
+      ],
+      "gist": "Bertakwa dan bertawakal kepada Allah."
+    },
+    {
+      "n": 6,
+      "topic": "Syukur",
+      "kind": "quran",
+      "expected": [
+        "14:7"
+      ],
+      "gist": "Syukur dan penambahan nikmat."
+    },
+    {
+      "n": 7,
+      "topic": "Mengendalikan amarah",
+      "kind": "quran",
+      "expected": [
+        "3:134"
+      ],
+      "gist": "Menahan amarah dan memaafkan."
+    },
+    {
+      "n": 8,
+      "topic": "Berbakti kepada orang tua",
+      "kind": "quran",
+      "expected": [
+        "17:23",
+        "17:24"
+      ],
+      "gist": "Berbuat baik dan bertutur lembut kepada orang tua."
+    },
+    {
+      "n": 9,
+      "topic": "Menghindari gibah dan prasangka",
+      "kind": "quran",
+      "expected": [
+        "49:12"
+      ],
+      "gist": "Larangan prasangka buruk, mencari kesalahan, dan menggunjing."
+    },
+    {
+      "n": 10,
+      "topic": "Introspeksi diri",
+      "kind": "quran",
+      "expected": [
+        "59:18"
+      ],
+      "gist": "Mengevaluasi apa yang dipersiapkan untuk hari esok."
+    },
+    {
+      "n": 11,
+      "topic": "Sabar dan syukur dalam segala keadaan",
+      "kind": "hadith",
+      "expected": [],
+      "gist": "Orang beriman bersyukur saat mendapat kesenangan dan bersabar saat tertimpa kesulitan."
+    },
+    {
+      "n": 12,
+      "topic": "Meluruskan niat",
+      "kind": "hadith",
+      "expected": [
+        "Sahih al-Bukhari #1"
+      ],
+      "gist": "Amal dinilai berdasarkan niat."
+    },
+    {
+      "n": 13,
+      "topic": "Menjaga lisan",
+      "kind": "hadith",
+      "expected": [
+        "Sahih al-Bukhari #6018"
+      ],
+      "gist": "Berkata baik atau diam, tidak menyakiti tetangga, dan memuliakan tamu."
+    },
+    {
+      "n": 14,
+      "topic": "Mengendalikan amarah",
+      "kind": "hadith",
+      "expected": [
+        "Sahih Muslim #6643",
+        "Sahih Muslim #6644"
+      ],
+      "gist": "Kekuatan sejati mencakup kemampuan mengendalikan diri saat marah."
+    },
+    {
+      "n": 15,
+      "topic": "Keutamaan menuntut ilmu",
+      "kind": "hadith",
+      "expected": [
+        "Sahih Muslim #6853"
+      ],
+      "gist": "Keutamaan menempuh jalan untuk mencari ilmu."
+    },
+    {
+      "n": 16,
+      "topic": "Puasa dan pengendalian diri",
+      "kind": "hadith",
+      "expected": [
+        "Sahih al-Bukhari #1904"
+      ],
+      "gist": "Puasa sebagai perisai."
+    },
+    {
+      "n": 17,
+      "topic": "Kejujuran dalam berdagang",
+      "kind": "hadith",
+      "expected": [
+        "Sahih al-Bukhari #2079"
+      ],
+      "gist": "Kejujuran dan keterbukaan penjual serta pembeli."
+    },
+    {
+      "n": 18,
+      "topic": "Menyambung silaturahmi",
+      "kind": "hadith",
+      "expected": [
+        "Sahih al-Bukhari #5986"
+      ],
+      "gist": "Keutamaan menjaga hubungan kekerabatan."
+    },
+    {
+      "n": 19,
+      "topic": "Tidak menipu",
+      "kind": "hadith",
+      "expected": [
+        "Sahih Muslim #283",
+        "Sahih Muslim #284"
+      ],
+      "gist": "Peringatan terhadap perilaku menipu."
+    },
+    {
+      "n": 20,
+      "topic": "Bekerja dan mencari nafkah",
+      "kind": "hadith",
+      "expected": [
+        "Sahih al-Bukhari #2072"
+      ],
+      "gist": "Keutamaan makan dari hasil usaha sendiri."
+    }
+  ]
+}

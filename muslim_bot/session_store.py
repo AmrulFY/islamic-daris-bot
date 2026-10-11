@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from collections import deque
+import sqlite3
+import threading
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from uuid import uuid4
 
 
@@ -11,39 +14,135 @@ class Turn:
     assistant: str
 
 
+_SCHEMA = """
+create table if not exists sessions (
+    id text primary key,
+    created_at text not null,
+    updated_at text not null
+);
+create table if not exists turns (
+    id integer primary key autoincrement,
+    session_id text not null references sessions(id),
+    user_text text not null,
+    assistant_text text not null,
+    created_at text not null
+);
+create index if not exists idx_turns_session on turns(session_id, id);
+"""
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _iso(value: datetime) -> str:
+    return value.isoformat(timespec="seconds")
+
+
 class SessionStore:
-    def __init__(self, max_turns: int = 12) -> None:
+    """Chat history store backed by SQLite (file or in-memory).
+
+    With ``db_path=None`` an in-memory database is used, matching the old
+    in-memory behavior. With a file path the history survives restarts and is
+    shared across workers.
+    """
+
+    def __init__(self, max_turns: int = 12, db_path: str | Path | None = None) -> None:
+        if max_turns < 1:
+            raise ValueError("max_turns must be positive")
         self.max_turns = max_turns
-        self._turns: dict[str, deque[Turn]] = {}
+        target = str(db_path) if db_path else ":memory:"
+        if db_path:
+            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
+        self._conn = sqlite3.connect(target, check_same_thread=False)
+        with self._lock:
+            self._conn.executescript(_SCHEMA)
+            self._conn.commit()
+
+    def close(self) -> None:
+        with self._lock:
+            self._conn.close()
 
     def new_session_id(self) -> str:
         session_id = uuid4().hex
-        self._turns[session_id] = deque(maxlen=self.max_turns)
+        now = _iso(_utcnow())
+        with self._lock:
+            self._conn.execute(
+                "insert into sessions (id, created_at, updated_at) values (?, ?, ?)",
+                (session_id, now, now),
+            )
+            self._conn.commit()
         return session_id
 
     def ensure_session(self, session_id: str | None) -> str:
-        if session_id and session_id in self._turns:
-            return session_id
-        if session_id:
-            self._turns[session_id] = deque(maxlen=self.max_turns)
-            return session_id
-        return self.new_session_id()
+        if not session_id:
+            return self.new_session_id()
+        now = _iso(_utcnow())
+        with self._lock:
+            self._conn.execute(
+                "insert or ignore into sessions (id, created_at, updated_at) values (?, ?, ?)",
+                (session_id, now, now),
+            )
+            self._conn.commit()
+        return session_id
 
     def append(self, session_id: str, user: str, assistant: str) -> None:
-        self._turns.setdefault(session_id, deque(maxlen=self.max_turns)).append(
-            Turn(user=user, assistant=assistant)
-        )
+        now = _iso(_utcnow())
+        with self._lock:
+            self._ensure_session_row(session_id, now)
+            self._conn.execute(
+                "insert into turns (session_id, user_text, assistant_text, created_at)"
+                " values (?, ?, ?, ?)",
+                (session_id, user, assistant, now),
+            )
+            self._conn.execute(
+                "delete from turns where session_id = ? and id not in ("
+                "  select id from turns where session_id = ? order by id desc limit ?"
+                ")",
+                (session_id, session_id, self.max_turns),
+            )
+            self._conn.commit()
 
     def history_prompt(self, session_id: str, latest_message: str) -> str:
-        turns = self._turns.get(session_id)
-        if not turns:
+        with self._lock:
+            rows = self._conn.execute(
+                "select user_text, assistant_text from ("
+                "  select id, user_text, assistant_text from turns"
+                "  where session_id = ? order by id desc limit ?"
+                ") order by id asc",
+                (session_id, self.max_turns),
+            ).fetchall()
+        if not rows:
             return latest_message
 
         lines = [
             "Riwayat percakapan singkat untuk konteks. Jangan mengutip riwayat ini sebagai sumber agama.",
         ]
-        for turn in turns:
-            lines.append(f"Pengguna: {turn.user}")
-            lines.append(f"Asisten: {turn.assistant}")
+        for user_text, assistant_text in rows:
+            lines.append(f"Pengguna: {user_text}")
+            lines.append(f"Asisten: {assistant_text}")
         lines.append(f"Pertanyaan terbaru: {latest_message}")
         return "\n".join(lines)
+
+    def purge_inactive(self, days: float = 7.0) -> int:
+        cutoff = _iso(_utcnow() - timedelta(days=days))
+        with self._lock:
+            cursor = self._conn.execute("select count(*) from sessions where updated_at < ?", (cutoff,))
+            stale_count = int(cursor.fetchone()[0])
+            if stale_count == 0:
+                return 0
+            self._conn.execute("delete from turns where session_id in (select id from sessions where updated_at < ?)", (cutoff,))
+            self._conn.execute("delete from sessions where updated_at < ?", (cutoff,))
+            self._conn.commit()
+        return stale_count
+
+    def _ensure_session_row(self, session_id: str, now: str) -> None:
+        self._conn.execute(
+            "insert or ignore into sessions (id, created_at, updated_at) values (?, ?, ?)",
+            (session_id, now, now),
+        )
+        self._conn.execute(
+            "update sessions set updated_at = ? where id = ?",
+            (now, session_id),
+        )

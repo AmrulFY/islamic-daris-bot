@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 
@@ -9,13 +10,13 @@ HADITH_LANGS = ("ar", "en", "id")
 
 
 def sqlite_count(db_path: Path, table: str) -> int:
-    with sqlite3.connect(db_path) as conn:
+    with closing(sqlite3.connect(db_path)) as conn:
         row = conn.execute(f"select count(*) from {table}").fetchone()
     return int(row[0])
 
 
 def sqlite_scalar(db_path: Path, query: str) -> int:
-    with sqlite3.connect(db_path) as conn:
+    with closing(sqlite3.connect(db_path)) as conn:
         row = conn.execute(query).fetchone()
     return int(row[0])
 
@@ -24,7 +25,7 @@ def sqlite_file_ok(db_path: Path) -> bool:
     if not db_path.exists() or db_path.stat().st_size == 0:
         return False
     try:
-        with sqlite3.connect(db_path) as conn:
+        with closing(sqlite3.connect(db_path)) as conn:
             conn.execute("select name from sqlite_master limit 1").fetchall()
     except sqlite3.DatabaseError:
         return False
@@ -48,7 +49,7 @@ def hadith_db_ready(db_path: Path) -> bool:
         ):
             return False
 
-        with sqlite3.connect(db_path) as conn:
+        with closing(sqlite3.connect(db_path)) as conn:
             rows = conn.execute(
                 """
                 select b.slug, t.lang, count(*)

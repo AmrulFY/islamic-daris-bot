@@ -1,4 +1,4 @@
-# Deploy Muslim Bot on an OpenClaw VPS
+# Deploy Islamic Daris Bot on an OpenClaw VPS
 
 This app is designed to run beside an OpenClaw gateway on the same Linux VPS. It binds to loopback by default, keeps runtime state in a Docker volume, and exposes the admin UI through SSH tunnel, Tailscale, or a reverse proxy you control.
 
@@ -36,6 +36,20 @@ OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-5.6
 ```
 
+Recommended extras (all optional, with defaults):
+
+```bash
+AGENT_MAX_TURNS=10
+SESSION_RETENTION_DAYS=7
+CHAT_RATE_LIMIT_PER_MINUTE=30
+MCP_STARTUP_TIMEOUT_SECONDS=45
+TELEGRAM_BOT_TOKEN=123456:ABC-...   # from @BotFather; enables the telegram-bot service
+```
+
+`SESSION_DB_PATH` is already set to `/app/data/sessions.db` by the Compose file
+so chat history survives container restarts. If your LLM gateway only supports
+Chat Completions (not the Responses API), also set `OPENAI_USE_RESPONSES=false`.
+
 ## Start
 
 Run Compose from the `muslim_bot` directory:
@@ -47,6 +61,10 @@ make compose-logs
 ```
 
 The first start seeds the Hadith SQLite database from jsDelivr. That can take a few minutes and requires outbound HTTPS.
+
+If `TELEGRAM_BOT_TOKEN` is set, a second container (`muslim-bot-telegram`)
+starts the Telegram polling bot automatically. Without a token it exits; the
+web API is unaffected.
 
 ## Access
 

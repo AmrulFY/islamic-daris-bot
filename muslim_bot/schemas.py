@@ -9,10 +9,11 @@ class Reference(BaseModel):
     type: str = Field(pattern="^(quran|hadith)$")
     label: str
     source_id: str | None = None
+    verified: bool | None = None
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(min_length=1)
+    message: str = Field(min_length=1, max_length=2000)
     session_id: str | None = None
     language: str = Field(default="id", pattern="^(id|en)$")
 

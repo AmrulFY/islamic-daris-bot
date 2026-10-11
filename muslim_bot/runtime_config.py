@@ -95,10 +95,11 @@ class RuntimeConfig(BaseModel):
     llm: LLMConnection
     mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
     answer_language: Literal["id", "en"] = "id"
-    agent_timeout_seconds: int = 120
+    agent_timeout_seconds: int = 300
+    agent_max_turns: int = 10
     session_max_turns: int = 12
 
-    @field_validator("agent_timeout_seconds", "session_max_turns")
+    @field_validator("agent_timeout_seconds", "agent_max_turns", "session_max_turns")
     @classmethod
     def positive_int(cls, value: int) -> int:
         if value < 1:
@@ -121,6 +122,7 @@ def default_runtime_config(settings: Settings) -> RuntimeConfig:
             base_url=settings.openai_base_url,
             organization=settings.openai_organization,
             project=settings.openai_project,
+            use_responses=settings.openai_use_responses,
         ),
         mcp_servers=[
             MCPServerConfig(
@@ -133,6 +135,7 @@ def default_runtime_config(settings: Settings) -> RuntimeConfig:
                     "DB_PATH": str(settings.quran_db_path),
                     "LOG_LEVEL": "warn",
                 },
+                timeout_seconds=settings.mcp_startup_timeout_seconds,
             ),
             MCPServerConfig(
                 id="hadith",
@@ -144,9 +147,11 @@ def default_runtime_config(settings: Settings) -> RuntimeConfig:
                     "DATABASE_PATH": str(settings.hadith_db_path),
                     "LOG_LEVEL": "silent",
                 },
+                timeout_seconds=settings.mcp_startup_timeout_seconds,
             ),
         ],
         agent_timeout_seconds=settings.agent_timeout_seconds,
+        agent_max_turns=settings.agent_max_turns,
         session_max_turns=settings.session_max_turns,
     )
 

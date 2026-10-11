@@ -28,6 +28,15 @@ services:
       HADITH_SEEDER_COMMAND: /app/bin/hadith-seeder
       HADITH_SEEDER_ARGS: ""
       HADITH_SEEDER_CWD: /app/hadith-api-go-run
+      MCP_STARTUP_TIMEOUT_SECONDS: ${MCP_STARTUP_TIMEOUT_SECONDS:-45}
+      AGENT_TIMEOUT_SECONDS: ${AGENT_TIMEOUT_SECONDS:-300}
+      AGENT_MAX_TURNS: ${AGENT_MAX_TURNS:-10}
+      SESSION_MAX_TURNS: ${SESSION_MAX_TURNS:-12}
+      SESSION_DB_PATH: /app/data/sessions.db
+      SESSION_RETENTION_DAYS: ${SESSION_RETENTION_DAYS:-7}
+      CHAT_RATE_LIMIT_PER_MINUTE: ${CHAT_RATE_LIMIT_PER_MINUTE:-30}
+      CHAT_CACHE_ENABLED: ${CHAT_CACHE_ENABLED:-true}
+      ANSWER_CACHE_TTL_DAYS: ${ANSWER_CACHE_TTL_DAYS:-7}
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
@@ -38,6 +47,18 @@ services:
       timeout: 10s
       start_period: 60s
       retries: 3
+
+  telegram-bot:
+    image: muslim-bot:openclaw
+    container_name: muslim-bot-telegram
+    restart: unless-stopped
+    command: ["python", "-m", "muslim_bot.telegram_bot"]
+    depends_on:
+      muslim-bot:
+        condition: service_healthy
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_API_BASE: http://muslim-bot:8000
 
 volumes:
   muslim_bot_data:

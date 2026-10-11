@@ -3,13 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Muslim Bot Admin</title>
+    <title>Islamic Daris Bot Admin</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <header class="topbar">
       <div>
-        <h1>Muslim Bot</h1>
+        <h1>Islamic Daris Bot</h1>
         <p id="statusLine">Checking service status</p>
       </div>
       <div class="token-box">
@@ -33,6 +33,7 @@
           <button id="sendChat" type="button">Send</button>
         </div>
         <textarea id="chatInput" rows="4">hadis tentang niat</textarea>
+        <div id="chatStatus" class="status-line" aria-live="polite"></div>
         <pre id="chatOutput" class="output"></pre>
       </section>
 
@@ -71,9 +72,17 @@
             Project
             <input id="llmProject" type="text" />
           </label>
+          <label class="inline">
+            <input id="llmUseResponses" type="checkbox" />
+            Use Responses API (uncheck for Chat Completions gateways)
+          </label>
           <label>
             Agent timeout
             <input id="agentTimeout" type="number" min="1" />
+          </label>
+          <label>
+            Agent max iterations
+            <input id="agentMaxTurns" type="number" min="1" />
           </label>
           <label>
             Session turns
