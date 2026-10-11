@@ -19,7 +19,7 @@ from typing import Any
 
 import numpy as np
 
-from .retrieval import MAX_CONTEXT_PER_SOURCE, MAX_HADITH_CHARS, Passage, hadith_matn
+from .retrieval import MAX_CANDIDATES_PER_SOURCE, MAX_HADITH_CHARS, Passage, hadith_matn
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +176,7 @@ class SemanticSearcher:
     def _rank(self, kind: str, query: np.ndarray) -> list[tuple[int, float]]:
         ids, matrix = self._matrices[kind]
         scores = matrix @ query
-        top = np.argsort(-scores)[:MAX_CONTEXT_PER_SOURCE]
+        top = np.argsort(-scores)[:MAX_CANDIDATES_PER_SOURCE]
         return [(int(ids[i]), float(scores[i])) for i in top if scores[i] >= MIN_SIMILARITY]
 
     async def search(

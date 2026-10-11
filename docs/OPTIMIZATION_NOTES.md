@@ -1,6 +1,6 @@
 # Catatan Optimasi Latensi Muslim Bot
 
-Status per 2026-10-11 (diperbarui setelah pertanyaan lanjutan dan kesiapan deploy). Dokumen ini merangkum apa yang sudah dikerjakan untuk
+Status per 2026-10-11 (diperbarui setelah FTS5 + cap konteks: Langkah 9). Dokumen ini merangkum apa yang sudah dikerjakan untuk
 mempercepat waktu dari prompt sampai jawaban, hasil pengukurannya, dan target
 perbaikan berikutnya.
 

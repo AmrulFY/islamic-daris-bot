@@ -15,10 +15,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 MAX_PASSAGES_PER_SOURCE = 4
-# Semantic candidates and the cap per source in the final context. On a small
-# check (10 questions) the target verse was in the top 4 for 20% of them, top 8
-# for 40% and top 12 for 60%, then flat; the answering LLM picks the best few.
-MAX_CONTEXT_PER_SOURCE = 12
+# Candidates fetched per source before fusion; the final context sent to the
+# LLM is capped lower (MAX_CONTEXT_PER_SOURCE) to cut tokens/latency. The LLM
+# prompt asks for the best 2-4 dalil, so depth beyond 5 mostly adds noise.
+MAX_CANDIDATES_PER_SOURCE = 12
+MAX_CONTEXT_PER_SOURCE = 5
 MAX_HADITH_CHARS = 700
 MAX_KEYWORDS = 6
 
@@ -178,6 +179,66 @@ def _score_sql(column: str, keywords: list[list[str]]) -> tuple[str, str, list[s
 def search_quran(db_path: Path, keywords: list[list[str]], language: str = "id") -> list[Passage]:
     if not keywords:
         return []
+    fts_passages = _search_quran_fts(db_path, keywords, language)
+    if fts_passages is not None:
+        return fts_passages
+    return _search_quran_like(db_path, keywords, language)
+
+
+def _search_quran_fts(
+    db_path: Path, keywords: list[list[str]], language: str
+) -> list[Passage] | None:
+    """BM25-ranked search via sidecar FTS. None when unavailable (caller falls back)."""
+    try:
+        from .fts import build_match, ensure_quran_sidecar, search_sidecar
+    except ImportError:
+        return None
+    try:
+        match = build_match(keywords)
+        if not match:
+            return []
+        fts_path = ensure_quran_sidecar(db_path)
+        if fts_path is None:
+            return None
+        ranked = search_sidecar(fts_path, match, language, MAX_PASSAGES_PER_SOURCE)
+        if ranked is None:
+            return None
+        if not ranked:
+            return []
+        return _fetch_quran_by_ids(db_path, ranked, language)
+    except Exception:  # noqa: BLE001 - FTS is best-effort; LIKE fallback covers it.
+        return None
+
+
+def _fetch_quran_by_ids(
+    db_path: Path, ranked: list[tuple[int, float]], language: str
+) -> list[Passage]:
+    column = "a.translation_en" if language == "en" else "a.translation_indo"
+    scores = dict(ranked)
+    marks = ",".join("?" for _ in ranked)
+    with closing(sqlite3.connect(db_path)) as conn:
+        rows = conn.execute(
+            f"select a.id, a.surah_id, a.number_in_surah, {column}, s.name_transliteration"
+            " from ayahs a join surahs s on s.id = a.surah_id"
+            f" where a.id in ({marks})",
+            [ref_id for ref_id, _ in ranked],
+        ).fetchall()
+    rows.sort(key=lambda row: scores.get(row[0], 0.0))
+    return [
+        Passage(
+            kind="quran",
+            label=f"{name} {surah}:{ayah}",
+            source_id=f"{surah}:{ayah}",
+            text=str(text),
+            score=float(-scores.get(ref_id, 0.0)),
+        )
+        for ref_id, surah, ayah, text, name in rows
+    ]
+
+
+def _search_quran_like(db_path: Path, keywords: list[list[str]], language: str = "id") -> list[Passage]:
+    if not keywords:
+        return []
     column = "a.translation_en" if language == "en" else "a.translation_indo"
     score, where, params = _score_sql(column, keywords)
     sql = (
@@ -200,6 +261,95 @@ def search_quran(db_path: Path, keywords: list[list[str]], language: str = "id")
 
 
 def search_hadith(db_path: Path, keywords: list[list[str]], language: str = "id") -> list[Passage]:
+    if not keywords:
+        return []
+    fts_passages = _search_hadith_fts(db_path, keywords, language)
+    if fts_passages is not None:
+        return fts_passages
+    return _search_hadith_like(db_path, keywords, language)
+
+
+def _search_hadith_fts(
+    db_path: Path, keywords: list[list[str]], language: str
+) -> list[Passage] | None:
+    """BM25 via native hadith_fts, else sidecar. None when unavailable."""
+    try:
+        from .fts import (
+            build_match,
+            ensure_hadith_sidecar,
+            native_hadith_fts,
+            search_native_hadith_fts,
+            search_sidecar,
+        )
+    except ImportError:
+        return None
+    try:
+        match = build_match(keywords)
+        if not match:
+            return []
+        ranked: list[tuple[int, float]] | None = None
+        if native_hadith_fts(db_path):
+            ranked = search_native_hadith_fts(db_path, match, language, MAX_PASSAGES_PER_SOURCE)
+            if ranked is not None:
+                return _fetch_hadith_by_ids(db_path, _dedupe_ranked(ranked), language)
+        fts_path = ensure_hadith_sidecar(db_path)
+        if fts_path is None:
+            return None
+        ranked = search_sidecar(fts_path, match, language, MAX_PASSAGES_PER_SOURCE)
+        if ranked is None:
+            return None
+        if not ranked:
+            return []
+        return _fetch_hadith_by_ids(db_path, _dedupe_ranked(ranked), language)
+    except Exception:  # noqa: BLE001 - FTS is best-effort; LIKE fallback covers it.
+        return None
+
+
+def _dedupe_ranked(ranked: list[tuple[int, float]]) -> list[tuple[int, float]]:
+    seen: dict[int, float] = {}
+    for ref_id, rank in ranked:
+        if ref_id not in seen:
+            seen[ref_id] = rank
+    return sorted(seen.items(), key=lambda item: item[1])
+
+
+def _fetch_hadith_by_ids(
+    db_path: Path, ranked: list[tuple[int, float]], language: str
+) -> list[Passage]:
+    if not ranked:
+        return []
+    preferred = ["en", "id"] if language == "en" else ["id", "en"]
+    scores = dict(ranked)
+    marks = ",".join("?" for _ in ranked)
+    with closing(sqlite3.connect(db_path)) as conn:
+        rows = conn.execute(
+            "select h.id, h.number, b.name_en, ht.lang, ht.text from hadiths h"
+            " join books b on b.id = h.book_id"
+            " join hadith_texts ht on ht.hadith_id = h.id and ht.lang in ('id', 'en')"
+            f" where h.id in ({marks})",
+            [ref_id for ref_id, _ in ranked],
+        ).fetchall()
+    grouped: dict[int, tuple[int, str, dict[str, str]]] = {}
+    for ref_id, number, book, lang, text in rows:
+        grouped.setdefault(ref_id, (number, book, {}))[2][lang] = str(text)
+    passages: list[Passage] = []
+    for ref_id, (number, book, texts) in sorted(grouped.items(), key=lambda item: scores.get(item[0], 0.0)):
+        text = next((texts[lang] for lang in preferred if texts.get(lang, "").strip()), "")
+        if not text:
+            continue
+        passages.append(
+            Passage(
+                kind="hadith",
+                label=f"{book} #{number}",
+                source_id=str(number),
+                text=hadith_matn(text, MAX_HADITH_CHARS),
+                score=float(-scores.get(ref_id, 0.0)),
+            )
+        )
+    return passages[:MAX_PASSAGES_PER_SOURCE]
+
+
+def _search_hadith_like(db_path: Path, keywords: list[list[str]], language: str = "id") -> list[Passage]:
     if not keywords:
         return []
     lang = "en" if language == "en" else "id"
