@@ -1,6 +1,6 @@
 # Catatan Optimasi Latensi Muslim Bot
 
-Status per 2026-10-11 (diperbarui setelah perbaikan database hadits). Dokumen ini merangkum apa yang sudah dikerjakan untuk
+Status per 2026-10-11 (diperbarui setelah pertanyaan lanjutan dan kesiapan deploy). Dokumen ini merangkum apa yang sudah dikerjakan untuk
 mempercepat waktu dari prompt sampai jawaban, hasil pengukurannya, dan target
 perbaikan berikutnya.
 
@@ -156,6 +156,57 @@ Perbaikan dilakukan di repo ini, tanpa mengubah repo Go:
 - Seeder Go sendiri belum diperbaiki (repo terpisah). Perbaikan di sana: kunci
   JSON jamak, `chapter_id` dari rentang bab, dan urutan seed bab sebelum hadits.
 
+### Langkah 7: pertanyaan lanjutan (follow-up)
+Sebelumnya retrieval hanya memakai pesan terbaru, jadi "jelaskan ayat tadi" atau
+"bagaimana dengan hadits?" tidak punya kata kunci dan konteks dalil kosong
+(model diinstruksikan mengatakan "dalil tidak ditemukan").
+
+- Pesan tanpa kata kunci sendiri meminjam topik dari pertanyaan sebelumnya
+  (`build_retrieval_query` di `retrieval.py`). Jika pesan menyebut sumber
+  ("hadits"/"ayat"), pesan itu yang menentukan sumbernya; jika tidak, sumber
+  mengikuti pertanyaan sebelumnya.
+- Dalil yang dikutip pada jawaban sebelumnya dibaca ulang dari database
+  (`cited_passages`) dan dikirim sebagai "DALIL YANG DIBAHAS PADA JAWABAN
+  SEBELUMNYA", sehingga penjelasan memakai teks asli, bukan ingatan model.
+- Lanjutan berantai ("ayat tentang riba" -> "jelaskan ayat tadi" -> "bagaimana
+  dengan hadits?") ditangani dengan menelusuri 4 giliran terakhir
+  (`follow_up_sources`, `SessionStore.recent_turns`). Versi pertama hanya melihat
+  satu giliran dan kehilangan topik pada lanjutan kedua; ketahuan lewat uji
+  percakapan nyata.
+- Prompt pipeline: salam, terima kasih, atau permintaan menyederhanakan jawaban
+  tidak lagi dijawab dengan "pencarian database tidak menemukan dalil".
+- Kegagalan panggilan ke gateway LLM (timeout, koneksi, status error) sebelumnya
+  menjadi HTTP 500 mentah. Sekarang 504 / 503 / 502 di `/chat`, dan event `error`
+  di `/chat/stream`.
+- Uji nyata 4 giliran dalam satu sesi (riba -> jelaskan lebih sederhana ->
+  bagaimana dengan hadits -> terima kasih): semua rujukan terverifikasi, tiap
+  giliran 8-30 dtk.
+
+### Langkah 8: kesiapan deploy indeks semantik
+- Indeks `semantic.db` sebelumnya hanya ada di mesin lokal dan default ke
+  `/app/.data` (bukan volume), sehingga di deploy fitur semantik mati diam-diam
+  dan indeks hilang tiap redeploy.
+- `SEMANTIC_DB_PATH=/app/data/semantic.db` di Dockerfile dan compose, plus
+  variabel baru di compose (`SEMANTIC_*`, `EMBEDDING_*`, `AGENT_PIPELINE_ENABLED`,
+  `AGENT_PARALLEL_TOOL_CALLS`, `MCP_HEALTH_CHECK_INTERVAL_SECONDS`).
+- Pembangunan otomatis di latar belakang saat startup API
+  (`_semantic_startup` di `api.py`, `SEMANTIC_AUTO_INDEX`, default true). API
+  tetap melayani dengan pencarian kata selama indeks dibangun, dan pembangunan
+  dilanjutkan dari titik terakhir jika proses restart. Berhenti di antara batch
+  saat shutdown, jadi tidak menahan penghentian server.
+- Indeks punya penanda "lengkap" per sumber (`meta` di `semantic.db`). Pencari
+  hanya memuat sumber yang lengkap (tidak pernah indeks setengah jadi), mencoba
+  lagi tiap 30 dtk selama belum lengkap, dan memuat ulang otomatis setelah build.
+  Tidak lagi membuat berkas kosong jika indeks belum ada.
+- `GET /health` punya field `semantic_index` (`ready`/`building`/`missing`/
+  `disabled`). Hanya informasi, tidak pernah membuat health check gagal.
+- Panduan VPS (`deploy/OPENCLAW_VPS.md`) menjelaskan build pertama (sekitar
+  7-10 menit, beberapa sen), perbaikan database hadits saat boot, dan cara
+  menyalin `semantic.db` yang sudah ada.
+- Belum diuji: build Docker dan boot kontainer sebenarnya (Docker tidak
+  dijalankan di sini). Yang diuji: logika build/resume/berhenti, pemuatan indeks,
+  dan konfigurasi, lewat test.
+
 ## 4. Hasil
 
 Sampel kecil (6 pertanyaan baru per kondisi, model yang sama saat dibandingkan).
@@ -185,7 +236,7 @@ saat dalil tidak ditemukan). Belum ada evaluasi sistematis.
 - Diubah: `agent.py`, `config.py`, `.env.example`, `requirements.txt` (numpy),
   `tests/test_agent.py`, `tests/test_streaming.py`.
 - Tambahan: `eval/` (dataset dan skrip evaluasi retrieval).
-- 125 test lolos.
+- 146 test lolos.
 
 ## 6. Pengaturan baru (`.env`)
 
@@ -210,6 +261,10 @@ saat dalil tidak ditemukan). Belum ada evaluasi sistematis.
   jadi satu dalil target adalah ukuran yang ketat. Hadits yang diriwayatkan
   dengan banyak jalur juga bersaing satu sama lain (contoh: Bukhari #1 niat).
 - Panggilan embedding masih sesekali timeout (1 dari ~57 pada evaluasi).
+- Pesan "terima kasih" setelah percakapan tetap menjalankan retrieval (topik dipinjam dari
+  pertanyaan sebelumnya), menambah sekitar 1 dtk tanpa manfaat. Jawabannya tetap benar.
+- Ekstraksi rujukan sesekali ikut menangkap kata sebelum nama surah (contoh label
+  "Ada juga Al-Baqarah 2:278"); sudah ada sebelumnya, dan rujukannya tetap terverifikasi.
 - Sekitar 269 hadits tidak punya teks sama sekali dan tidak bisa dicari.
 - Server harus di-restart agar kode baru aktif. Indeks semantik dimuat saat
   request semantik pertama.
@@ -218,6 +273,7 @@ saat dalil tidak ditemukan). Belum ada evaluasi sistematis.
 
 Urut prioritas.
 
+0. ~~Pertanyaan lanjutan~~ dan ~~kesiapan deploy indeks semantik~~ Selesai (Langkah 7 dan 8).
 1. ~~Embed query yang sudah dibersihkan~~ Sudah diuji dan ditolak (lihat Langkah 4).
 2. ~~Perbanyak kandidat semantik~~ Selesai: 12 per sumber.
 3. ~~Set evaluasi retrieval~~ Selesai (Langkah 5).

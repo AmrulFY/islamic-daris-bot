@@ -13,9 +13,19 @@ logger = logging.getLogger(__name__)
 
 from .config import Settings, load_settings
 from .fast_path import detect_fast_path, fetch_ayah, fetch_hadith, fetch_random_ayah, fetch_random_hadith, format_ayah, format_hadith
-from .retrieval import format_context, interleave_passages, needs_agent_loop, retrieve, wanted_sources
+from .retrieval import (
+    Passage,
+    build_retrieval_query,
+    extract_keywords as extract_keywords_of,
+    format_context,
+    hadith_matn,
+    interleave_passages,
+    needs_agent_loop,
+    retrieve,
+    wanted_sources,
+)
 from .semantic import SemanticSearcher
-from .references import ReferenceValidator, annotate_references
+from .references import ReferenceValidator, _normalize_book, annotate_references
 from .runtime_config import MCPServerConfig, RuntimeConfig, RuntimeConfigStore
 from .schemas import Reference
 
@@ -84,13 +94,15 @@ Aturan utama:
 PIPELINE_INSTRUCTIONS = """
 Anda adalah Islamic Daris Bot, asisten edukasi Islam berbahasa Indonesia.
 
-Anda tidak memiliki tool. Pencarian dalil sudah dilakukan dan hasilnya diberikan pada bagian "KONTEKS DALIL" di pesan pengguna.
+Anda tidak memiliki tool. Pencarian dalil sudah dilakukan dan hasilnya diberikan pada bagian "KONTEKS DALIL" di pesan pengguna. Bila ada bagian "DALIL YANG DIBAHAS PADA JAWABAN SEBELUMNYA", itu teks asli dari database untuk dalil yang Anda kutip pada giliran sebelumnya.
 
 Aturan utama:
 - Jawab ringkas, hangat, dan mudah dipahami. Pilih 2-4 dalil yang paling relevan dari konteks; abaikan yang tidak relevan.
 - Kutip dalil HANYA dari KONTEKS DALIL, dan tulis rujukannya persis seperti label di dalam kurung siku, misalnya "Al-Baqarah 2:153" atau "Sahih al-Bukhari #1", tanpa kurung siku.
 - Jangan membuat ayat, nomor hadith, atau sanad yang tidak ada di konteks. Jangan mengarang isi dalil.
-- Jika konteks kosong atau tidak relevan dengan pertanyaan, katakan dengan jujur bahwa pencarian database tidak menemukan dalil spesifik, lalu beri penjelasan umum singkat tanpa mengutip nomor ayat/hadith.
+- Pesan bisa berupa lanjutan percakapan ("jelaskan ayat tadi", "bagaimana dengan hadits?", "yang kedua maksudnya?"). Pahami maksud "tadi/itu/yang kedua" dari riwayat percakapan, dan jelaskan dalil yang dimaksud menggunakan teks di bagian dalil sebelumnya atau konteks.
+- Jika pesan bukan permintaan dalil (salam, terima kasih, pertanyaan umum, atau permintaan menyederhanakan jawaban sebelumnya), jawab wajar dan singkat tanpa menyebut pencarian database.
+- Jika konteks kosong atau tidak relevan dengan pertanyaan dalil, katakan dengan jujur bahwa pencarian database tidak menemukan dalil spesifik, lalu beri penjelasan umum singkat tanpa mengutip nomor ayat/hadith.
 - Yang TIDAK tersedia: tafsir per ayat, asbabun nuzul, penilaian derajat hadith, jadwal shalat, arah kiblat, kalender Hijriah, kalkulator zakat, dan audio murottal. Katakan jujur bila diminta.
 - Jangan mengaku sebagai mufti, ustaz, atau otoritas fatwa. Untuk pertanyaan hukum/fatwa pribadi, berikan konteks edukatif dan sarankan bertanya ke ulama yang kompeten.
 - Tetap dalam koridor edukasi Islam. Untuk pertanyaan di luar topik, jawab singkat lalu arahkan kembali ke topik Islam dengan sopan.
@@ -480,6 +492,7 @@ class MuslimBotRunner:
         session_id: str,
         history_prompt: str | None = None,
         language: str = "id",
+        recent_turns: list[tuple[str, str]] | None = None,
     ) -> AgentReply:
         timeout_seconds = self.load_runtime_config().agent_timeout_seconds
 
@@ -489,6 +502,7 @@ class MuslimBotRunner:
                 session_id=session_id,
                 history_prompt=history_prompt,
                 language=language,
+                recent_turns=recent_turns,
             ):
                 if kind == "done":
                     return payload
@@ -508,8 +522,13 @@ class MuslimBotRunner:
         session_id: str,
         history_prompt: str | None = None,
         language: str = "id",
+        recent_turns: list[tuple[str, str]] | None = None,
     ):
         """Yield ("delta", text) / ("tool", name) events, then ("done", AgentReply).
+
+        `recent_turns` are the latest (user, assistant) exchanges of the session,
+        oldest first; the pipeline uses them to answer follow-ups such as
+        "jelaskan ayat tadi" even when several follow-ups are chained.
 
         Raises AgentLoopLimitError if the agent exceeds its iteration budget and
         RuntimeError for configuration or MCP failures.
@@ -530,13 +549,29 @@ class MuslimBotRunner:
 
         if self.settings.agent_pipeline_enabled and not needs_agent_loop(message):
             retrieved = time.perf_counter()
+            previous_user, cited_answer = follow_up_sources(recent_turns)
             passages = await self.gather_passages(
-                message, runtime_config, language=language, session_id=session_id
+                message,
+                runtime_config,
+                language=language,
+                session_id=session_id,
+                previous_user=previous_user,
             )
             if passages is not None:
+                previous_passages: list[Passage] = []
+                if cited_answer and build_retrieval_query(message, previous_user).follow_up:
+                    previous_passages = await asyncio.to_thread(
+                        self.cited_passages, cited_answer, language
+                    )
                 timings.retrieval = time.perf_counter() - retrieved
                 async for event in self._answer_from_context(
-                    runtime_config, prompt, passages, session_id=session_id, timings=timings
+                    runtime_config,
+                    prompt,
+                    passages,
+                    session_id=session_id,
+                    timings=timings,
+                    previous_passages=previous_passages,
+                    has_history=bool(recent_turns),
                 ):
                     yield event
                 return
@@ -606,26 +641,29 @@ class MuslimBotRunner:
         *,
         language: str = "id",
         session_id: str = "-",
+        previous_user: str | None = None,
     ) -> list | None:
         """Keyword and semantic search together, interleaved.
 
         Returns None when retrieval itself fails so the caller can fall back to
         the agent loop.
         """
+        query = build_retrieval_query(message, previous_user)
         keyword_task = asyncio.to_thread(
             retrieve,
-            message,
+            query.text,
             quran_db_path=self.settings.quran_db_path,
             hadith_db_path=self.settings.hadith_db_path,
             language=language,
+            sources_from=query.sources_from,
         )
         if self.semantic is None:
             semantic_task = None
         else:
-            want_quran, want_hadith = wanted_sources(message)
+            want_quran, want_hadith = wanted_sources(query.sources_from)
             kinds = [kind for kind, wanted in (("quran", want_quran), ("hadith", want_hadith)) if wanted]
             semantic_task = self.semantic.search(
-                message,
+                query.text,
                 kinds,
                 language=language,
                 api_key=runtime_config.llm.api_key,
@@ -643,10 +681,47 @@ class MuslimBotRunner:
             logger.warning("semantic search failed: %s", semantic_passages)
             semantic_passages = []
         logger.info(
-            "retrieval session=%s keyword=%d semantic=%d",
-            session_id, len(keyword_passages), len(semantic_passages),
+            "retrieval session=%s keyword=%d semantic=%d follow_up=%s",
+            session_id, len(keyword_passages), len(semantic_passages), query.follow_up,
         )
         return interleave_passages(semantic_passages, keyword_passages)
+
+    def cited_passages(self, answer: str, language: str = "id") -> list[Passage]:
+        """Re-read from the database the dalil cited in a previous answer."""
+        passages: list[Passage] = []
+        for ref in extract_references(answer)[:MAX_PREVIOUS_PASSAGES]:
+            try:
+                if ref.type == "quran" and ref.source_id:
+                    surah, ayah = (int(part) for part in ref.source_id.split(":"))
+                    data = fetch_ayah(self.settings.quran_db_path, surah, ayah, language)
+                    if data:
+                        passages.append(
+                            Passage(
+                                kind="quran",
+                                label=f"{data['surah_name']} {data['surah']}:{data['ayah']}",
+                                source_id=f"{data['surah']}:{data['ayah']}",
+                                text=str(data["translation"]),
+                            )
+                        )
+                elif ref.type == "hadith" and ref.source_id:
+                    slug = _normalize_book(ref.label)
+                    data = (
+                        fetch_hadith(self.settings.hadith_db_path, slug, int(ref.source_id), language)
+                        if slug
+                        else None
+                    )
+                    if data and data.get("translation"):
+                        passages.append(
+                            Passage(
+                                kind="hadith",
+                                label=f"{data['book']} #{data['number']}",
+                                source_id=str(data["number"]),
+                                text=hadith_matn(str(data["translation"])),
+                            )
+                        )
+            except (ValueError, OSError) as exc:
+                logger.warning("could not re-read cited dalil %s: %s", ref.label, exc)
+        return passages
 
     async def _answer_from_context(
         self,
@@ -656,6 +731,8 @@ class MuslimBotRunner:
         *,
         session_id: str,
         timings: RunTimings,
+        previous_passages: list[Passage] | None = None,
+        has_history: bool = False,
     ):
         """One LLM call, no tools: write the answer from pre-retrieved passages."""
         from agents import Runner
@@ -663,7 +740,7 @@ class MuslimBotRunner:
         agent, run_config, MaxTurnsExceeded = self.build_agent(
             runtime_config, [], instructions=PIPELINE_INSTRUCTIONS
         )
-        used_tools = ["local_db"] if passages else []
+        used_tools = ["local_db"] if passages or previous_passages else []
         if used_tools:
             yield ("tool", "local_db")
 
@@ -671,7 +748,7 @@ class MuslimBotRunner:
         try:
             result = Runner.run_streamed(
                 agent,
-                f"{prompt}\n\n{format_context(passages)}",
+                f"{prompt}\n\n{format_context(passages, previous=previous_passages, has_history=has_history)}",
                 run_config=run_config,
                 max_turns=2,
             )
@@ -694,6 +771,23 @@ class MuslimBotRunner:
             timings.summary(),
         )
         yield ("done", reply)
+
+
+MAX_PREVIOUS_PASSAGES = 6
+
+
+def follow_up_sources(recent_turns: list[tuple[str, str]] | None) -> tuple[str | None, str | None]:
+    """(question to borrow the topic from, answer whose dalil to re-read).
+
+    Follow-ups can be chained ("ayat tentang riba" -> "jelaskan ayat tadi" ->
+    "bagaimana dengan hadits?"), so look back for the latest question that has
+    a topic of its own and the latest answer that cited something.
+    """
+    if not recent_turns:
+        return None, None
+    topic = next((user for user, _ in reversed(recent_turns) if extract_keywords_of(user)), None)
+    cited = next((answer for _, answer in reversed(recent_turns) if extract_references(answer)), None)
+    return topic or recent_turns[-1][0], cited
 
 
 class AgentLoopLimitError(RuntimeError):

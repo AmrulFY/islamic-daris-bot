@@ -35,6 +35,7 @@ class HealthResponse(BaseModel):
     hadith_api_dir: str
     runtime_config_path: str
     enabled_mcp_servers: int
+    semantic_index: str = "disabled"  # ready | building | missing | disabled
 
 
 class AdminConfigResponse(BaseModel):

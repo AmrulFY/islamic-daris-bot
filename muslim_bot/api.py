@@ -4,11 +4,13 @@ import asyncio
 import json
 import logging
 import os
+import threading
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, FastAPI, Request
+from openai import APIConnectionError, APIStatusError, APITimeoutError
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -19,6 +21,7 @@ from .db_status import hadith_db_ready, quran_db_ready
 from .rate_limit import RateLimiter
 from .runtime_config import RuntimeConfig, RuntimeConfigStore
 from .schemas import AdminConfigResponse, ChatRequest, ChatResponse, HealthResponse, MCPTestResponse
+from .semantic_index import build as build_index, index_complete
 from .session_store import SessionStore
 
 
@@ -52,22 +55,47 @@ def get_answer_cache() -> AnswerCache:
     )
 
 
-async def _warm_up_semantic() -> None:
+_semantic_stop = threading.Event()
+
+
+async def _semantic_startup() -> None:
+    """Build the semantic index if it is missing, then warm up the embedding client.
+
+    Runs in the background so the API serves (keyword search only) while a first
+    boot embeds the corpus, which takes several minutes. The build resumes where
+    it stopped if the process restarts.
+    """
     runner = get_runner()
+    settings = get_settings()
     if runner.semantic is None:
         return
     llm = runner.load_runtime_config().llm
-    if llm.is_configured:
-        await runner.semantic.warm_up(api_key=llm.api_key, base_url=llm.base_url)
+    if not llm.is_configured:
+        return
+    if settings.semantic_auto_index and not index_complete(settings.semantic_db_path):
+        if quran_db_ready(settings.quran_db_path) and hadith_db_ready(settings.hadith_db_path):
+            logging.getLogger(__name__).info("semantic index incomplete; building in the background")
+            runner.semantic.building = True
+            try:
+                await asyncio.to_thread(build_index, ["quran", "hadith"], _semantic_stop.is_set)
+                runner.semantic.reload()
+            except Exception:  # noqa: BLE001 - keyword search keeps working.
+                logging.getLogger(__name__).exception("semantic index build failed; will retry on next start")
+            finally:
+                runner.semantic.building = False
+        else:
+            logging.getLogger(__name__).warning("semantic index not built: Quran/Hadith databases are not ready")
+    await runner.semantic.warm_up(api_key=llm.api_key, base_url=llm.base_url)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     get_session_store().purge_inactive(get_settings().session_retention_days)
     get_answer_cache().purge_expired()
-    warm_up = asyncio.create_task(_warm_up_semantic())
+    semantic_startup = asyncio.create_task(_semantic_startup())
     yield
-    warm_up.cancel()
+    _semantic_stop.set()
+    semantic_startup.cancel()
     await get_runner().mcp_manager.aclose()
     get_session_store().close()
 
@@ -142,6 +170,7 @@ def health(
     quran_ready = quran_db_ready(settings.quran_db_path)
     hadith_ready = hadith_db_ready(settings.hadith_db_path)
     status = "ok" if runtime_config.llm.is_configured and quran_ready and hadith_ready else "degraded"
+    searcher = get_runner().semantic
     return HealthResponse(
         status=status,
         llm_configured=runtime_config.llm.is_configured,
@@ -151,6 +180,8 @@ def health(
         hadith_api_dir=str(settings.hadith_api_dir),
         runtime_config_path=str(settings.runtime_config_path),
         enabled_mcp_servers=sum(1 for server in runtime_config.mcp_servers if server.enabled),
+        # Informational only: a missing or still-building index never fails the health check.
+        semantic_index=searcher.status() if searcher is not None else "disabled",
     )
 
 
@@ -195,6 +226,7 @@ async def chat(
     session_id = store.ensure_session(request.session_id)
     history_prompt = store.history_prompt(session_id, request.message)
     has_history = history_prompt != request.message
+    recent_turns = store.recent_turns(session_id)
 
     fast = runner.try_fast_path(request.message, language=request.language)
     if fast is not None:
@@ -213,6 +245,7 @@ async def chat(
             session_id=session_id,
             history_prompt=history_prompt,
             language=request.language,
+            recent_turns=recent_turns,
         )
     except asyncio.TimeoutError as exc:
         raise HTTPException(status_code=504, detail="Agent request timed out") from exc
@@ -220,6 +253,9 @@ async def chat(
         raise HTTPException(status_code=508, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except (APIConnectionError, APIStatusError) as exc:
+        status, detail = llm_error_response(exc) or (502, "LLM gateway error")
+        raise HTTPException(status_code=status, detail=detail) from exc
 
     store.append(session_id, request.message, reply.answer)
     if not has_history:
@@ -256,6 +292,17 @@ def _cached_to_response(session_id: str, cached: dict) -> ChatResponse:
     )
 
 
+def llm_error_response(exc: Exception) -> tuple[int, str] | None:
+    """Map a failed LLM gateway call to (HTTP status, message), None if not one."""
+    if isinstance(exc, APITimeoutError):
+        return 504, "LLM request timed out"
+    if isinstance(exc, APIConnectionError):
+        return 503, "LLM gateway unreachable"
+    if isinstance(exc, APIStatusError):
+        return 502, f"LLM gateway error ({exc.status_code})"
+    return None
+
+
 def _sse(event: str, payload: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
@@ -276,6 +323,7 @@ async def chat_stream(
     session_id = store.ensure_session(request.session_id)
     history_prompt = store.history_prompt(session_id, request.message)
     has_history = history_prompt != request.message
+    recent_turns = store.recent_turns(session_id)
     idle_timeout = runtime_config.agent_timeout_seconds
 
     async def instant(reply: AgentReply):
@@ -309,6 +357,7 @@ async def chat_stream(
             session_id=session_id,
             history_prompt=history_prompt,
             language=request.language,
+            recent_turns=recent_turns,
         )
         completed_answer = ""
         completed_reply: AgentReply | None = None
@@ -332,6 +381,8 @@ async def chat_stream(
             yield _sse("error", {"detail": str(exc)})
         except RuntimeError as exc:
             yield _sse("error", {"detail": str(exc)})
+        except (APIConnectionError, APIStatusError) as exc:
+            yield _sse("error", {"detail": (llm_error_response(exc) or (502, "LLM gateway error"))[1]})
         finally:
             try:
                 await gen.aclose()

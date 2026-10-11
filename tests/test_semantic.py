@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from muslim_bot.retrieval import Passage, hadith_matn, interleave_passages
-from muslim_bot.semantic import SemanticSearcher, init_db, to_blob
+from muslim_bot.semantic import SemanticSearcher, init_db, mark_complete, to_blob
 from tests.test_retrieval import make_dbs
 from tests.test_streaming import collect, delta, install_agents_stub, make_runner
 
@@ -34,6 +34,8 @@ def make_searcher(tmp_path: Path) -> SemanticSearcher:
             ],
         )
         conn.commit()
+    mark_complete(db, "quran")
+    mark_complete(db, "hadith")
     return SemanticSearcher(
         db_path=db, quran_db_path=quran, hadith_db_path=hadith, model="m", dimensions=DIMS
     )

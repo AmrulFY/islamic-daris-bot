@@ -22,6 +22,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     QURAN_SOURCE_DB_PATH=/app/seed/quran.db \
     QURAN_DB_PATH=/app/data/quran.db \
     HADITH_DB_PATH=/app/data/hadith.db \
+    SEMANTIC_DB_PATH=/app/data/semantic.db \
     QURAN_MCP_COMMAND=/app/bin/quran-mcp \
     QURAN_MCP_ARGS="" \
     QURAN_MCP_CWD=/app \

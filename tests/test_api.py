@@ -14,7 +14,7 @@ from muslim_bot.session_store import SessionStore
 
 
 class FakeRunner:
-    async def ask(self, message: str, *, session_id: str, history_prompt: str | None = None, language: str = "id") -> AgentReply:
+    async def ask(self, message: str, *, session_id: str, history_prompt: str | None = None, language: str = "id", recent_turns=None) -> AgentReply:
         return AgentReply(
             answer="Amal bergantung pada niat. Rujukan: Sahih al-Bukhari #1.",
             references=[Reference(type="hadith", label="Sahih al-Bukhari #1", source_id="1")],

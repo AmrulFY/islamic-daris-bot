@@ -12,6 +12,7 @@ import asyncio
 import logging
 import sqlite3
 import threading
+import time
 from contextlib import closing
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 EMBED_TIMEOUT_SECONDS = 4.0
 MIN_SIMILARITY = 0.2
+# While the index is missing or still being built, look again at most this often.
+RELOAD_INTERVAL_SECONDS = 30.0
 
 def to_blob(vector: np.ndarray) -> bytes:
     return np.asarray(vector, dtype=np.float32).tobytes()
@@ -37,7 +40,29 @@ def init_db(db_path: Path) -> None:
             " kind text not null, ref_id integer not null, vec blob not null,"
             " primary key (kind, ref_id))"
         )
+        conn.execute("create table if not exists meta (key text primary key, value text not null)")
         conn.commit()
+
+
+def mark_complete(db_path: Path, kind: str) -> None:
+    """Record that every vector of `kind` has been written."""
+    with closing(sqlite3.connect(db_path)) as conn:
+        conn.execute(
+            "insert or replace into meta (key, value) values (?, datetime('now'))",
+            (f"complete:{kind}",),
+        )
+        conn.commit()
+
+
+def is_complete(db_path: Path, kind: str) -> bool:
+    if not db_path.exists():
+        return False
+    try:
+        with closing(sqlite3.connect(db_path)) as conn:
+            row = conn.execute("select 1 from meta where key = ?", (f"complete:{kind}",)).fetchone()
+    except sqlite3.DatabaseError:
+        return False
+    return row is not None
 
 
 class SemanticSearcher:
@@ -56,24 +81,28 @@ class SemanticSearcher:
         self.model = model
         self.dimensions = dimensions
         self._lock = threading.Lock()
-        self._loaded = False
+        self._last_load_attempt = 0.0
+        self.building = False
         self._matrices: dict[str, tuple[np.ndarray, np.ndarray]] = {}
         self._client: Any = None
         self._client_key: tuple | None = None
 
     # -- index loading ---------------------------------------------------
 
-    def _load(self) -> None:
+    def _load(self, *, force: bool = False) -> None:
+        """Load the vectors of every complete kind; retried while some are missing."""
         with self._lock:
-            if self._loaded:
+            now = time.monotonic()
+            if not force and now - self._last_load_attempt < RELOAD_INTERVAL_SECONDS:
                 return
-            self._loaded = True
-            if not self.db_path.exists():
-                logger.warning("semantic index %s not found; semantic search disabled", self.db_path)
+            self._last_load_attempt = now
+            if not self.db_path.exists():  # connecting would create an empty file
                 return
             try:
                 with closing(sqlite3.connect(self.db_path)) as conn:
                     for kind in ("quran", "hadith"):
+                        if kind in self._matrices or not is_complete(self.db_path, kind):
+                            continue
                         rows = conn.execute(
                             "select ref_id, vec from embeddings where kind = ?", (kind,)
                         ).fetchall()
@@ -94,10 +123,23 @@ class SemanticSearcher:
                         logger.info("semantic index loaded: %s=%d vectors", kind, len(ids))
             except Exception as exc:  # noqa: BLE001 - degrade to keyword-only.
                 logger.warning("failed to load semantic index: %s", exc)
-                self._matrices.clear()
+
+    def reload(self) -> None:
+        """Pick up an index that was just (re)built."""
+        with self._lock:
+            self._matrices.clear()
+        self._load(force=True)
+
+    def status(self) -> str:
+        """ready | building | missing."""
+        self._load()
+        if all(kind in self._matrices for kind in ("quran", "hadith")):
+            return "ready"
+        return "building" if self.building else "missing"
 
     def available(self, kind: str) -> bool:
-        self._load()
+        if kind not in self._matrices:
+            self._load()
         return kind in self._matrices
 
     async def warm_up(self, *, api_key: str | None, base_url: str | None) -> None:

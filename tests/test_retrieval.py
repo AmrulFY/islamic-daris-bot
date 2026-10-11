@@ -22,10 +22,10 @@ def make_dbs(tmp_path: Path) -> tuple[Path, Path]:
     with closing(sqlite3.connect(quran)) as conn:
         conn.executescript(
             """
-            create table surahs (id integer primary key, name_transliteration text);
+            create table surahs (id integer primary key, number integer, name_transliteration text);
             create table ayahs (id integer primary key, surah_id integer, number_in_surah integer,
                 text_uthmani text, translation_indo text, translation_en text);
-            insert into surahs values (2, 'Al-Baqarah'), (51, 'Adh-Dhariyat');
+            insert into surahs values (2, 2, 'Al-Baqarah'), (51, 51, 'Adh-Dhariyat');
             insert into ayahs values
               (1, 2, 278, 'ar', 'Tinggalkan sisa riba jika kamu beriman', 'leave usury'),
               (2, 51, 56, 'ar', 'Aku tidak menciptakan jin dan manusia melainkan agar mereka beribadah', 'worship');

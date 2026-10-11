@@ -108,6 +108,7 @@ class Settings:
     agent_parallel_tool_calls: bool = True
     agent_pipeline_enabled: bool = True
     semantic_search_enabled: bool = True
+    semantic_auto_index: bool = True
     semantic_db_path: Path | None = None
     embedding_model: str = "text-embedding-3-small"
     embedding_dimensions: int = 512
@@ -165,6 +166,7 @@ def load_settings(env_file: Path | None = PROJECT_ROOT / ".env") -> Settings:
         agent_parallel_tool_calls=_bool_from_env("AGENT_PARALLEL_TOOL_CALLS", True),
         agent_pipeline_enabled=_bool_from_env("AGENT_PIPELINE_ENABLED", True),
         semantic_search_enabled=_bool_from_env("SEMANTIC_SEARCH_ENABLED", True),
+        semantic_auto_index=_bool_from_env("SEMANTIC_AUTO_INDEX", True),
         semantic_db_path=_path_from_env("SEMANTIC_DB_PATH", data_dir / "semantic.db"),
         embedding_model=os.getenv("EMBEDDING_MODEL") or "text-embedding-3-small",
         embedding_dimensions=_int_from_env("EMBEDDING_DIMENSIONS", 512),

@@ -52,7 +52,7 @@ def test_chat_request_rejects_oversized_message() -> None:
 
 
 class FakeRunner:
-    async def ask(self, message: str, *, session_id: str, history_prompt: str | None = None, language: str = "id") -> AgentReply:
+    async def ask(self, message: str, *, session_id: str, history_prompt: str | None = None, language: str = "id", recent_turns=None) -> AgentReply:
         return AgentReply(answer="ok", references=[], used_tools=[])
 
     def try_fast_path(self, message: str, *, language: str = "id"):

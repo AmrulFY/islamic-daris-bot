@@ -104,6 +104,27 @@ class SessionStore:
             )
             self._conn.commit()
 
+    def recent_turns(self, session_id: str, limit: int = 4) -> list[tuple[str, str]]:
+        """Up to `limit` latest (user text, assistant text) pairs, oldest first."""
+        with self._lock:
+            rows = self._conn.execute(
+                "select user_text, assistant_text from ("
+                "  select id, user_text, assistant_text from turns"
+                "  where session_id = ? order by id desc limit ?"
+                ") order by id asc",
+                (session_id, limit),
+            ).fetchall()
+        return [(str(user), str(assistant)) for user, assistant in rows]
+
+    def last_turn(self, session_id: str) -> tuple[str, str] | None:
+        """(user text, assistant text) of the most recent turn, if any."""
+        with self._lock:
+            row = self._conn.execute(
+                "select user_text, assistant_text from turns where session_id = ? order by id desc limit 1",
+                (session_id,),
+            ).fetchone()
+        return (str(row[0]), str(row[1])) if row else None
+
     def history_prompt(self, session_id: str, latest_message: str) -> str:
         with self._lock:
             rows = self._conn.execute(

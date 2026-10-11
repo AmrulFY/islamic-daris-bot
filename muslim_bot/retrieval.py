@@ -31,6 +31,9 @@ STOPWORDS = frozenset(
     saya aku kami kita anda kamu mereka ada tidak bukan juga serta sertakan beserta
     keutamaan hukum pandangan islam menurut agama muslim rujukan sumber
     orang lain sesama semua apa saja saling para kita ketika jika maka agar supaya
+    tadi tersebut sebelumnya selanjutnya lanjut lanjutan lagi kedua pertama ketiga terakhir
+    nomor maksud maksudnya artinya arti makna lebih sederhana singkat ringkas contoh
+    terima kasih terimakasih makasih ya dong deh nih sih lah kok
     what is the of in on about verse verses hadith please explain give tell
     """.split()
 )
@@ -77,6 +80,31 @@ class Passage:
 def needs_agent_loop(message: str) -> bool:
     """True for structural requests (browse a surah/juz/book) the pipeline can't serve."""
     return bool(_STRUCTURAL.search(message))
+
+
+@dataclass(frozen=True)
+class RetrievalQuery:
+    text: str  # what to search for (keywords, embedding)
+    sources_from: str  # which message decides Quran vs Hadith
+    follow_up: bool  # the topic was taken from the previous question
+
+
+def build_retrieval_query(message: str, previous_user: str | None = None) -> RetrievalQuery:
+    """Search text for `message`, borrowing the previous question's topic if needed.
+
+    A follow-up like "jelaskan ayat tadi" or "bagaimana dengan hadits?" has no
+    content words of its own, so its topic comes from the previous question.
+    The current message still decides which source (ayat/hadits) is wanted when
+    it names one.
+    """
+    if previous_user and not extract_keywords(message):
+        names_source = bool(_QURAN_HINT.search(message) or _HADITH_HINT.search(message))
+        return RetrievalQuery(
+            text=f"{previous_user} {message}",
+            sources_from=message if names_source else previous_user,
+            follow_up=True,
+        )
+    return RetrievalQuery(text=message, sources_from=message, follow_up=False)
 
 
 def wanted_sources(message: str) -> tuple[bool, bool]:
@@ -224,12 +252,17 @@ def interleave_passages(
 
 
 def retrieve(
-    message: str, *, quran_db_path: Path, hadith_db_path: Path, language: str = "id"
+    message: str,
+    *,
+    quran_db_path: Path,
+    hadith_db_path: Path,
+    language: str = "id",
+    sources_from: str | None = None,
 ) -> list[Passage]:
     keywords = extract_keywords(message)
     if not keywords:
         return []
-    want_quran, want_hadith = wanted_sources(message)
+    want_quran, want_hadith = wanted_sources(sources_from or message)
     passages: list[Passage] = []
     if want_quran:
         passages += search_quran(quran_db_path, keywords, language)
@@ -238,10 +271,27 @@ def retrieve(
     return passages
 
 
-def format_context(passages: list[Passage]) -> str:
-    if not passages:
-        return "KONTEKS DALIL: pencarian database tidak menemukan dalil yang cocok."
-    lines = ["KONTEKS DALIL (hasil pencarian database; hanya boleh mengutip dari sini):"]
-    for passage in passages:
-        lines.append(f"- [{passage.label}] {passage.text}")
+def format_context(
+    passages: list[Passage], *, previous: list[Passage] | None = None, has_history: bool = False
+) -> str:
+    """Context block appended to the user's message for the answering LLM.
+
+    `previous` are dalil cited in the last answer, re-read from the database so
+    follow-ups like "jelaskan ayat tadi" are grounded in the real text.
+    """
+    lines: list[str] = []
+    if previous:
+        lines.append("DALIL YANG DIBAHAS PADA JAWABAN SEBELUMNYA (dari database):")
+        lines += [f"- [{p.label}] {p.text}" for p in previous]
+        lines.append("")
+    if passages:
+        lines.append("KONTEKS DALIL (hasil pencarian database; hanya boleh mengutip dari sini):")
+        lines += [f"- [{p.label}] {p.text}" for p in passages]
+    elif has_history:
+        lines.append(
+            "KONTEKS DALIL: tidak ada dalil baru yang ditemukan untuk pesan ini. "
+            "Jika pesan ini lanjutan, jawab dari riwayat percakapan dan dalil di atas."
+        )
+    else:
+        lines.append("KONTEKS DALIL: pencarian database tidak menemukan dalil yang cocok.")
     return "\n".join(lines)

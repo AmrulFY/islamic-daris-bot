@@ -11,13 +11,14 @@ import argparse
 import sqlite3
 import sys
 import time
+from typing import Callable
 from contextlib import closing
 
 import numpy as np
 
 from .config import load_settings
 from .runtime_config import RuntimeConfigStore
-from .semantic import hadith_matn, init_db, to_blob
+from .semantic import hadith_matn, init_db, is_complete, mark_complete, to_blob
 
 BATCH = 128
 MAX_RETRIES = 6
@@ -58,7 +59,16 @@ def _embed(client, model: str, dims: int, texts: list[str]) -> list[list[float]]
     raise RuntimeError("embeddings kept failing")
 
 
-def build(kinds: list[str]) -> None:
+def index_complete(db_path) -> bool:
+    return all(is_complete(db_path, kind) for kind in ("quran", "hadith"))
+
+
+def build(kinds: list[str], should_stop: Callable[[], bool] = lambda: False) -> bool:
+    """Embed everything still missing. Returns True when every kind is complete.
+
+    `should_stop` is checked between batches so a server shutdown never waits
+    for the whole index.
+    """
     from openai import OpenAI
 
     settings = load_settings()
@@ -74,6 +84,9 @@ def build(kinds: list[str]) -> None:
         print(f"{kind}: {len(done)} done, {len(todo)} to embed", flush=True)
         started = time.time()
         for start in range(0, len(todo), BATCH):
+            if should_stop():
+                print(f"{kind}: stopped early; resumes on next start", flush=True)
+                return False
             chunk = todo[start : start + BATCH]
             vectors = _embed(client, settings.embedding_model, settings.embedding_dimensions, [t for _, t in chunk])
             with closing(sqlite3.connect(db_path)) as conn:
@@ -84,7 +97,9 @@ def build(kinds: list[str]) -> None:
                 conn.commit()
             if (start // BATCH) % 10 == 0:
                 print(f"  {kind}: {start + len(chunk)}/{len(todo)} ({time.time() - started:.0f}s)", flush=True)
+        mark_complete(db_path, kind)
         print(f"{kind}: complete", flush=True)
+    return True
 
 
 def main(argv: list[str] | None = None) -> int:
