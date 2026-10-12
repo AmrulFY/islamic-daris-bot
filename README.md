@@ -38,7 +38,7 @@ make run-api
 Admin UI:
 
 ```text
-http://127.0.0.1:8000
+http://127.0.0.1:8021
 ```
 
 Use the `ADMIN_TOKEN` value from `.env` to edit the LLM connection and MCP servers. Settings are saved to `.data/runtime_config.json`; secret values are masked when read back by the UI.
@@ -46,7 +46,7 @@ Use the `ADMIN_TOKEN` value from `.env` to edit the LLM connection and MCP serve
 API:
 
 ```bash
-curl -X POST http://localhost:8000/chat \
+curl -X POST http://localhost:8021/chat \
   -H 'content-type: application/json' \
   -d '{"message":"hadis tentang niat"}'
 ```
@@ -54,7 +54,7 @@ curl -X POST http://localhost:8000/chat \
 Streaming (Server-Sent Events with `delta`, `tool`, `done`, and `error` events):
 
 ```bash
-curl -N -X POST http://localhost:8000/chat/stream \
+curl -N -X POST http://localhost:8021/chat/stream \
   -H 'content-type: application/json' \
   -d '{"message":"hadis tentang niat"}'
 ```
@@ -77,4 +77,4 @@ make compose-config
 make compose-up
 ```
 
-The Compose file binds `127.0.0.1:8000` on the VPS. Use SSH tunnel, Tailscale, or a reverse proxy for access. See `deploy/OPENCLAW_VPS.md`.
+The Compose file binds `127.0.0.1:8021` on the VPS. Use SSH tunnel, Tailscale, or a reverse proxy for access. See `deploy/OPENCLAW_VPS.md`.

@@ -17,7 +17,7 @@ FROM python:3.12-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     APP_HOST=0.0.0.0 \
-    APP_PORT=8000 \
+    APP_PORT=8021 \
     RUNTIME_CONFIG_PATH=/app/data/runtime_config.json \
     QURAN_SOURCE_DB_PATH=/app/seed/quran.db \
     QURAN_DB_PATH=/app/data/quran.db \
@@ -55,7 +55,7 @@ RUN chmod +x ./deploy/entrypoint.sh ./bin/quran-mcp ./bin/hadith-mcp ./bin/hadit
     && mkdir -p /app/data
 
 VOLUME ["/app/data"]
-EXPOSE 8000
+EXPOSE 8021
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -fsS "http://127.0.0.1:${APP_PORT}/health" >/dev/null || exit 1

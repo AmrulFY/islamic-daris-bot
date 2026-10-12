@@ -65,13 +65,13 @@ def test_load_settings_use_responses_defaults_to_none(monkeypatch) -> None:
 
 
 def test_load_settings_telegram_defaults(monkeypatch) -> None:
-    for key in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_PROXY", "TELEGRAM_CONNECT_TIMEOUT", "TELEGRAM_READ_TIMEOUT"):
+    for key in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_API_BASE", "TELEGRAM_PROXY", "TELEGRAM_CONNECT_TIMEOUT", "TELEGRAM_READ_TIMEOUT"):
         monkeypatch.delenv(key, raising=False)
 
     settings = load_settings(env_file=None)
 
     assert settings.telegram_bot_token is None
-    assert settings.telegram_api_base == "http://127.0.0.1:8000"
+    assert settings.telegram_api_base == "http://127.0.0.1:8021"
     assert settings.telegram_proxy is None
     assert settings.telegram_connect_timeout == 10.0
     assert settings.telegram_read_timeout == 30.0

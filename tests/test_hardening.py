@@ -91,7 +91,7 @@ def _settings(tmp_path: Path) -> Settings:
         session_retention_days=7,
         chat_rate_limit_per_minute=30,
         telegram_bot_token=None,
-        telegram_api_base="http://127.0.0.1:8000",
+        telegram_api_base="http://127.0.0.1:8021",
         telegram_proxy=None,
         telegram_connect_timeout=10.0,
         telegram_read_timeout=30.0,

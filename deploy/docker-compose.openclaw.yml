@@ -8,7 +8,7 @@ services:
     restart: unless-stopped
     environment:
       APP_HOST: 0.0.0.0
-      APP_PORT: 8000
+      APP_PORT: 8021
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6}
@@ -46,11 +46,11 @@ services:
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-512}
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8021:8021"
     volumes:
       - muslim_bot_data:/app/data
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8021/health"]
       interval: 30s
       timeout: 10s
       start_period: 60s
@@ -66,7 +66,7 @@ services:
         condition: service_healthy
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      TELEGRAM_API_BASE: http://muslim-bot:8000
+      TELEGRAM_API_BASE: http://muslim-bot:8021
 
 volumes:
   muslim_bot_data:

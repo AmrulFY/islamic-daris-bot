@@ -18,7 +18,7 @@ test:
 	$(PYTHON) -m pytest
 
 run-api:
-	$(PYTHON) -m uvicorn muslim_bot.api:app --host 0.0.0.0 --port 8000
+	$(PYTHON) -m uvicorn muslim_bot.api:app --host 0.0.0.0 --port 8021
 
 run-cli:
 	$(PYTHON) -m muslim_bot.cli

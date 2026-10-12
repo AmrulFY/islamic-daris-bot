@@ -95,18 +95,18 @@ web API is unaffected.
 
 ## Access
 
-The Compose file binds the app to `127.0.0.1:8000` on the VPS.
+The Compose file binds the app to `127.0.0.1:8021` on the VPS.
 
 SSH tunnel:
 
 ```bash
-ssh -L 8000:127.0.0.1:8000 user@your-vps
+ssh -L 8021:127.0.0.1:8021 user@your-vps
 ```
 
 Then open:
 
 ```text
-http://127.0.0.1:8000
+http://127.0.0.1:8021
 ```
 
 For public HTTPS, place Nginx, Caddy, or Tailscale Serve in front of the loopback app. Keep `ADMIN_TOKEN` required for config changes.
