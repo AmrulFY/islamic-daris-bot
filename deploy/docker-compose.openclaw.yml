@@ -15,6 +15,7 @@ services:
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       OPENAI_ORGANIZATION: ${OPENAI_ORGANIZATION:-}
       OPENAI_PROJECT: ${OPENAI_PROJECT:-}
+      OPENAI_USE_RESPONSES: ${OPENAI_USE_RESPONSES:-}
       RUNTIME_CONFIG_PATH: /app/data/runtime_config.json
       QURAN_SOURCE_DB_PATH: /app/seed/quran.db
       QURAN_DB_PATH: /app/data/quran.db
