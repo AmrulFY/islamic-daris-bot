@@ -30,7 +30,25 @@ Saya dapat membantu Anda:
 
 Setiap rujukan saya tandai terverifikasi dari database. Saya bersifat edukatif — bukan mufti atau ustaz — dan untuk persoalan hukum agama yang spesifik, saya akan menyarankan Anda bertanya langsung ke ulama yang kompeten.
 
-Silakan mulai bertanya! Contoh: hadis tentang niat atau ayat tentang sabar."""
+Silakan mulai bertanya! Contoh: hadis tentang niat atau ayat tentang sabar.
+
+Atur sesuai keinginan Anda dengan /settings (bahasa, gaya jawaban, catatan, panjang riwayat). Hapus riwayat percakapan dengan /reset."""
+
+SETTINGS_HELP = """Pengaturan Anda:
+{current}
+
+Ubah dengan:
+/bahasa id|en — bahasa jawaban
+/gaya ringkas|lengkap — gaya jawaban
+/catatan <teks> — catatan gaya untuk bot (maks 200 karakter), /catatan hapus untuk menghapus
+/riwayat <0-{max_turns}> — jumlah percakapan terakhir yang diingat (0 = tidak mengingat)
+/reset — hapus riwayat percakapan
+/lupa — hapus riwayat dan semua pengaturan
+
+Riwayat dan pengaturan dihapus otomatis jika tidak aktif beberapa hari."""
+
+DEFAULT_LABEL = "bawaan"
+CLEAR_WORDS = {"hapus", "reset", "default", "clear"}
 
 NON_TEXT_REPLY = (
     "Saat ini saya hanya dapat memproses pesan teks. "
@@ -39,7 +57,7 @@ NON_TEXT_REPLY = (
 
 ERROR_REPLY = (
     "Maaf, terjadi gangguan. Silakan coba lagi sebentar. "
-    "Jika berlanjut, coba mulai chat baru dengan /start."
+    "Jika berlanjut, coba mulai chat baru dengan /start atau /reset."
 )
 
 PROGRESS_REPLY = "🔍 Sebentar ya, saya carikan dalilnya…"
@@ -184,6 +202,34 @@ async def post_chat(
     return response.json()
 
 
+async def backend_call(settings: Settings, method: str, path: str, chat_id: int, json: dict | None = None) -> dict:
+    async with httpx.AsyncClient() as client:
+        response = await client.request(
+            method,
+            f"{settings.telegram_api_base.rstrip('/')}/sessions/{telegram_session_id(chat_id)}/{path}",
+            json=json,
+            timeout=BACKEND_TIMEOUT_SECONDS,
+        )
+    if response.status_code == 422:
+        raise ValueError(response.json().get("detail", "Nilai tidak valid"))
+    response.raise_for_status()
+    return response.json()
+
+
+def format_prefs(prefs: dict) -> str:
+    def show(value) -> str:
+        return DEFAULT_LABEL if value is None else str(value)
+
+    return "\n".join(
+        [
+            f"• Bahasa: {show(prefs.get('language'))}",
+            f"• Gaya: {show(prefs.get('style'))}",
+            f"• Catatan: {show(prefs.get('note'))}",
+            f"• Riwayat: {show(prefs.get('history_turns'))}",
+        ]
+    )
+
+
 async def send_reply(message, text: str) -> None:
     chunks = split_message(text)
     for chunk in chunks:
@@ -197,7 +243,100 @@ async def send_reply(message, text: str) -> None:
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message is None:
         return
+    settings: Settings = context.bot_data["settings"]
+    try:
+        await backend_call(settings, "DELETE", "history", update.message.chat_id)
+    except Exception:  # noqa: BLE001 - the welcome message matters more than the reset.
+        logger.warning("Could not reset history on /start")
     await send_reply(update.message, html.escape(WELCOME_MESSAGE))
+
+
+async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.message
+    if message is None:
+        return
+    settings: Settings = context.bot_data["settings"]
+    try:
+        body = await backend_call(settings, "DELETE", "history", message.chat_id)
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to reset history")
+        await message.reply_text(ERROR_REPLY)
+        return
+    count = body.get("deleted_turns", 0)
+    await message.reply_text(f"Riwayat percakapan dihapus ({count} percakapan). Pengaturan Anda tetap tersimpan.")
+
+
+async def forget_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.message
+    if message is None:
+        return
+    settings: Settings = context.bot_data["settings"]
+    try:
+        await backend_call(settings, "DELETE", "history", message.chat_id)
+        await backend_call(settings, "DELETE", "prefs", message.chat_id)
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to forget session")
+        await message.reply_text(ERROR_REPLY)
+        return
+    await message.reply_text("Riwayat dan semua pengaturan Anda sudah dihapus.")
+
+
+async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.message
+    if message is None:
+        return
+    settings: Settings = context.bot_data["settings"]
+    try:
+        prefs = await backend_call(settings, "GET", "prefs", message.chat_id)
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to load prefs")
+        await message.reply_text(ERROR_REPLY)
+        return
+    await send_reply(
+        message,
+        html.escape(SETTINGS_HELP.format(current=format_prefs(prefs), max_turns=prefs.get("max_history_turns", 12))),
+    )
+
+
+def parse_pref_args(field: str, args: list[str]) -> tuple[bool, object]:
+    """Turn command arguments into a prefs value. Returns (ok, value); value None resets the field."""
+    text = " ".join(args).strip()
+    if not text:
+        return False, None
+    if text.lower() in CLEAR_WORDS:
+        return True, None
+    if field == "history_turns":
+        if not text.isdigit():
+            return False, None
+        return True, int(text)
+    if field == "note":
+        return True, text
+    return True, text.lower()
+
+
+def make_pref_command(field: str, usage: str, label: str):
+    async def command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        message = update.message
+        if message is None:
+            return
+        ok, value = parse_pref_args(field, list(context.args or []))
+        if not ok:
+            await message.reply_text(f"Cara pakai: {usage}")
+            return
+        settings: Settings = context.bot_data["settings"]
+        try:
+            prefs = await backend_call(settings, "PUT", "prefs", message.chat_id, json={field: value})
+        except ValueError as exc:
+            await message.reply_text(f"{exc}\nCara pakai: {usage}")
+            return
+        except Exception:  # noqa: BLE001
+            logger.exception("Failed to save pref %s", field)
+            await message.reply_text(ERROR_REPLY)
+            return
+        shown = prefs.get(field)
+        await message.reply_text(f"{label} diatur ke: {DEFAULT_LABEL if shown is None else shown}")
+
+    return command
 
 
 async def typing_keepalive(chat, stop: asyncio.Event, interval: float = 4.0) -> None:
@@ -289,6 +428,13 @@ def build_application(settings: Settings) -> Application:
     application = builder.build()
     application.bot_data["settings"] = settings
     application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("reset", reset_command))
+    application.add_handler(CommandHandler("lupa", forget_command))
+    application.add_handler(CommandHandler("settings", settings_command))
+    application.add_handler(CommandHandler("bahasa", make_pref_command("language", "/bahasa id|en", "Bahasa")))
+    application.add_handler(CommandHandler("gaya", make_pref_command("style", "/gaya ringkas|lengkap", "Gaya jawaban")))
+    application.add_handler(CommandHandler("catatan", make_pref_command("note", "/catatan <teks> atau /catatan hapus", "Catatan")))
+    application.add_handler(CommandHandler("riwayat", make_pref_command("history_turns", "/riwayat <jumlah>", "Riwayat")))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     application.add_handler(
         MessageHandler(~filters.TEXT & ~filters.COMMAND, non_text_handler)

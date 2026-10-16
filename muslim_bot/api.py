@@ -20,9 +20,18 @@ from .config import PROJECT_ROOT, Settings, load_settings
 from .db_status import hadith_db_ready, quran_db_ready
 from .rate_limit import RateLimiter
 from .runtime_config import RuntimeConfig, RuntimeConfigStore
-from .schemas import AdminConfigResponse, ChatRequest, ChatResponse, HealthResponse, MCPTestResponse
+from .schemas import (
+    AdminConfigResponse,
+    ChatRequest,
+    ChatResponse,
+    HealthResponse,
+    HistoryClearResponse,
+    MCPTestResponse,
+    PrefsResponse,
+    PrefsUpdate,
+)
 from .semantic_index import build as build_index, index_complete
-from .session_store import SessionStore
+from .session_store import SessionStore, UserPrefs
 
 
 def configure_logging() -> None:
@@ -224,17 +233,21 @@ async def chat(
         raise HTTPException(status_code=503, detail="LLM connection is not configured")
 
     session_id = store.ensure_session(request.session_id)
+    prefs = store.get_prefs(session_id)
+    language = prefs.language or request.language
     history_prompt = store.history_prompt(session_id, request.message)
     has_history = history_prompt != request.message
-    recent_turns = store.recent_turns(session_id)
+    use_cache = not has_history and not prefs.customizes_answer
+    history_prompt = _with_prefs(prefs, history_prompt)
+    recent_turns = store.recent_turns(session_id, limit=_recent_limit(prefs))
 
-    fast = runner.try_fast_path(request.message, language=request.language)
+    fast = runner.try_fast_path(request.message, language=language)
     if fast is not None:
         store.append(session_id, request.message, fast.answer)
         return _reply_to_response(session_id, fast)
 
-    if not has_history:
-        cached = cache.get(request.message, request.language)
+    if use_cache:
+        cached = cache.get(request.message, language)
         if cached is not None:
             store.append(session_id, request.message, cached["answer"])
             return _cached_to_response(session_id, cached)
@@ -244,7 +257,7 @@ async def chat(
             request.message,
             session_id=session_id,
             history_prompt=history_prompt,
-            language=request.language,
+            language=language,
             recent_turns=recent_turns,
         )
     except asyncio.TimeoutError as exc:
@@ -258,10 +271,10 @@ async def chat(
         raise HTTPException(status_code=status, detail=detail) from exc
 
     store.append(session_id, request.message, reply.answer)
-    if not has_history:
+    if use_cache:
         cache.put(
             request.message,
-            request.language,
+            language,
             reply.answer,
             {
                 "references": [ref.model_dump() for ref in reply.references],
@@ -270,6 +283,71 @@ async def chat(
             },
         )
     return _reply_to_response(session_id, reply)
+
+
+def _with_prefs(prefs: UserPrefs, history_prompt: str) -> str:
+    block = prefs.prompt_block()
+    return f"{block}\n\n{history_prompt}" if block else history_prompt
+
+
+def _recent_limit(prefs: UserPrefs) -> int:
+    """Follow-up detection must not see turns the user asked the bot not to keep."""
+    default = 4
+    return default if prefs.history_turns is None else min(default, prefs.history_turns)
+
+
+def _prefs_response(session_id: str, prefs: UserPrefs, store: SessionStore) -> PrefsResponse:
+    return PrefsResponse(
+        session_id=session_id,
+        language=prefs.language,
+        style=prefs.style,
+        note=prefs.note,
+        history_turns=prefs.history_turns,
+        max_history_turns=store.max_turns,
+    )
+
+
+@app.get("/sessions/{session_id}/prefs", response_model=PrefsResponse)
+def get_prefs(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+    _: None = Depends(check_rate_limit),
+) -> PrefsResponse:
+    return _prefs_response(session_id, store.get_prefs(session_id), store)
+
+
+@app.put("/sessions/{session_id}/prefs", response_model=PrefsResponse)
+def put_prefs(
+    session_id: str,
+    update: PrefsUpdate,
+    store: SessionStore = Depends(get_session_store),
+    _: None = Depends(check_rate_limit),
+) -> PrefsResponse:
+    changes = {name: getattr(update, name) for name in update.model_fields_set}
+    try:
+        prefs = store.set_prefs(session_id, **changes)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return _prefs_response(session_id, prefs, store)
+
+
+@app.delete("/sessions/{session_id}/prefs", response_model=PrefsResponse)
+def delete_prefs(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+    _: None = Depends(check_rate_limit),
+) -> PrefsResponse:
+    store.clear_prefs(session_id)
+    return _prefs_response(session_id, UserPrefs(), store)
+
+
+@app.delete("/sessions/{session_id}/history", response_model=HistoryClearResponse)
+def delete_history(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+    _: None = Depends(check_rate_limit),
+) -> HistoryClearResponse:
+    return HistoryClearResponse(session_id=session_id, deleted_turns=store.clear_history(session_id))
 
 
 def _reply_to_response(session_id: str, reply: AgentReply) -> ChatResponse:
@@ -321,9 +399,13 @@ async def chat_stream(
         raise HTTPException(status_code=503, detail="LLM connection is not configured")
 
     session_id = store.ensure_session(request.session_id)
+    prefs = store.get_prefs(session_id)
+    language = prefs.language or request.language
     history_prompt = store.history_prompt(session_id, request.message)
     has_history = history_prompt != request.message
-    recent_turns = store.recent_turns(session_id)
+    use_cache = not has_history and not prefs.customizes_answer
+    history_prompt = _with_prefs(prefs, history_prompt)
+    recent_turns = store.recent_turns(session_id, limit=_recent_limit(prefs))
     idle_timeout = runtime_config.agent_timeout_seconds
 
     async def instant(reply: AgentReply):
@@ -332,14 +414,14 @@ async def chat_stream(
         yield _sse("done", _reply_to_response(session_id, reply).model_dump())
 
     async def generate():
-        fast = runner.try_fast_path(request.message, language=request.language)
+        fast = runner.try_fast_path(request.message, language=language)
         if fast is not None:
             async for event in instant(fast):
                 yield event
             return
 
-        if not has_history:
-            cached = cache.get(request.message, request.language)
+        if use_cache:
+            cached = cache.get(request.message, language)
             if cached is not None:
                 async for event in instant(
                     AgentReply(
@@ -356,7 +438,7 @@ async def chat_stream(
             request.message,
             session_id=session_id,
             history_prompt=history_prompt,
-            language=request.language,
+            language=language,
             recent_turns=recent_turns,
         )
         completed_answer = ""
@@ -388,11 +470,11 @@ async def chat_stream(
                 await gen.aclose()
             except Exception:
                 pass
-        if completed_answer and completed_reply and not has_history:
+        if completed_answer and completed_reply and use_cache:
             store.append(session_id, request.message, completed_answer)
             cache.put(
                 request.message,
-                request.language,
+                language,
                 completed_answer,
                 {
                     "references": [ref.model_dump() for ref in completed_reply.references],

@@ -26,6 +26,29 @@ class ChatResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class PrefsUpdate(BaseModel):
+    """Only the fields present in the request are changed; ``null`` resets a field."""
+
+    language: str | None = Field(default=None, pattern="^(id|en)$")
+    style: str | None = Field(default=None, pattern="^(ringkas|lengkap)$")
+    note: str | None = Field(default=None, max_length=200)
+    history_turns: int | None = Field(default=None, ge=0)
+
+
+class PrefsResponse(BaseModel):
+    session_id: str
+    language: str | None = None
+    style: str | None = None
+    note: str | None = None
+    history_turns: int | None = None
+    max_history_turns: int
+
+
+class HistoryClearResponse(BaseModel):
+    session_id: str
+    deleted_turns: int
+
+
 class HealthResponse(BaseModel):
     status: str
     llm_configured: bool
