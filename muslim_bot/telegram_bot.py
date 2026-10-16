@@ -4,6 +4,7 @@ import asyncio
 import html
 import logging
 import re
+from dataclasses import dataclass
 
 import httpx
 from telegram import Update
@@ -356,10 +357,119 @@ async def typing_keepalive(chat, stop: asyncio.Event, interval: float = 4.0) -> 
             pass
 
 
+_FILLER = r"(?:(?:tolong|mohon|please|bisa|ya|oke|ok)\s+)*"
+_SUFFIX = r"(?:\s+(?:saja|aja|ya|dong|deh|terus|seterusnya|please))*\s*[.!]*$"
+_STYLE_RE = re.compile(
+    rf"^{_FILLER}(?:(?:jawab|balas)(?:an)?(?:nya)?\s+)?(?:(?:yang|dengan|secara)\s+)?"
+    rf"(singkat|ringkas|pendek|lengkap|detail|terperinci|panjang){_SUFFIX}",
+    re.IGNORECASE,
+)
+_LANGUAGE_RE = re.compile(
+    rf"^{_FILLER}(?:(?:jawab|balas|bicara|berbicara|gunakan|pakai|menggunakan)\s+(?:(?:dalam|pakai|dengan|menggunakan)\s+)?"
+    rf"|(?:reply|answer|respond|speak|use)\s+(?:in\s+)?)(?:bahasa\s+)?"
+    rf"(inggris|english|indonesia|indonesian){_SUFFIX}",
+    re.IGNORECASE,
+)
+_NAME_RE = re.compile(
+    rf"^{_FILLER}panggil\s+(?:saya|aku|gue)\s+(.{{1,60}}?)(?:\s+(?:ya|saja|aja|dong))?\s*[.!]*$",
+    re.IGNORECASE,
+)
+_REMEMBER_RE = re.compile(r"^ingat(?:lah)?(?:\s+bahwa\b|:)?\s+(.{3,200}?)\s*$", re.IGNORECASE | re.DOTALL)
+_STYLE_WORDS = {
+    "singkat": "ringkas",
+    "ringkas": "ringkas",
+    "pendek": "ringkas",
+    "lengkap": "lengkap",
+    "detail": "lengkap",
+    "terperinci": "lengkap",
+    "panjang": "lengkap",
+}
+_LANGUAGE_WORDS = {"inggris": "en", "english": "en", "indonesia": "id", "indonesian": "id"}
+
+
+@dataclass(frozen=True)
+class PrefIntent:
+    field: str
+    value: str
+    label: str
+
+
+def detect_pref_intent(text: str) -> PrefIntent | None:
+    """Recognise a message that is *only* a preference instruction ("jawab singkat saja").
+
+    Patterns are anchored to the whole message, so a real question that merely
+    contains such words is never mistaken for a setting. The caller must still
+    ask the user for confirmation before saving.
+    """
+    text = text.strip()
+    if not text or text.startswith("/"):
+        return None
+    if match := _STYLE_RE.match(text):
+        style = _STYLE_WORDS[match.group(1).lower()]
+        return PrefIntent("style", style, f"Gaya jawaban: {style}")
+    if match := _LANGUAGE_RE.match(text):
+        language = _LANGUAGE_WORDS[match.group(1).lower()]
+        return PrefIntent("language", language, f"Bahasa jawaban: {language}")
+    if match := _NAME_RE.match(text):
+        name = match.group(1).strip()
+        return PrefIntent("note", f"Panggil pengguna dengan nama {name}", f"Catatan: panggil Anda {name}")
+    if match := _REMEMBER_RE.match(text):
+        note = " ".join(match.group(1).split())
+        if len(note) <= 200:
+            return PrefIntent("note", note, f"Catatan: {note}")
+    return None
+
+
+PENDING_KEY = "pending_pref"
+
+
+def pending_store(context) -> dict | None:
+    return getattr(context, "chat_data", None)
+
+
+async def confirm_pref_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.message
+    if message is None:
+        return
+    store = pending_store(context)
+    intent: PrefIntent | None = store.pop(PENDING_KEY, None) if store is not None else None
+    if intent is None:
+        await message.reply_text("Tidak ada pengaturan yang menunggu konfirmasi.")
+        return
+    settings: Settings = context.bot_data["settings"]
+    try:
+        await backend_call(settings, "PUT", "prefs", message.chat_id, json={intent.field: intent.value})
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to save confirmed pref")
+        await message.reply_text(ERROR_REPLY)
+        return
+    await message.reply_text(f"Tersimpan — {intent.label}. Lihat semua pengaturan dengan /settings.")
+
+
+async def cancel_pref_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.message
+    if message is None:
+        return
+    store = pending_store(context)
+    had_pending = store is not None and store.pop(PENDING_KEY, None) is not None
+    await message.reply_text("Dibatalkan." if had_pending else "Tidak ada pengaturan yang menunggu konfirmasi.")
+
+
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.message
     if message is None or not message.text:
         return
+    store = pending_store(context)
+    intent = detect_pref_intent(message.text)
+    if intent is not None and store is not None:
+        store[PENDING_KEY] = intent
+        await message.reply_text(
+            f"Simpan sebagai pengaturan tetap?\n{intent.label}\n\n"
+            "Balas /ya untuk menyimpan atau /tidak untuk membatalkan."
+        )
+        return
+    if store is not None:
+        store.pop(PENDING_KEY, None)
     settings: Settings = context.bot_data["settings"]
     stop_typing = asyncio.Event()
     typing_task = asyncio.create_task(typing_keepalive(message.chat, stop_typing))
@@ -435,6 +545,8 @@ def build_application(settings: Settings) -> Application:
     application.add_handler(CommandHandler("gaya", make_pref_command("style", "/gaya ringkas|lengkap", "Gaya jawaban")))
     application.add_handler(CommandHandler("catatan", make_pref_command("note", "/catatan <teks> atau /catatan hapus", "Catatan")))
     application.add_handler(CommandHandler("riwayat", make_pref_command("history_turns", "/riwayat <jumlah>", "Riwayat")))
+    application.add_handler(CommandHandler("ya", confirm_pref_command))
+    application.add_handler(CommandHandler("tidak", cancel_pref_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     application.add_handler(
         MessageHandler(~filters.TEXT & ~filters.COMMAND, non_text_handler)

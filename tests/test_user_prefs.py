@@ -265,3 +265,97 @@ def test_reset_and_forget_commands(monkeypatch) -> None:
     message = CommandMessage()
     calls = _run_command(forget_command, message, [], monkeypatch, lambda m, p, j: {})
     assert [(c[0], c[1]) for c in calls] == [("DELETE", "history"), ("DELETE", "prefs")]
+
+
+@pytest.mark.parametrize(
+    ("text", "field", "value"),
+    [
+        ("jawab singkat saja", "style", "ringkas"),
+        ("Tolong jawabannya ringkas aja ya", "style", "ringkas"),
+        ("lengkap", "style", "lengkap"),
+        ("jawab yang detail dong!", "style", "lengkap"),
+        ("jawab dalam bahasa Inggris", "language", "en"),
+        ("pakai bahasa indonesia saja", "language", "id"),
+        ("reply in English", "language", "en"),
+        ("panggil saya Kak Ali ya", "note", "Panggil pengguna dengan nama Kak Ali"),
+        ("ingat bahwa saya pemula dalam tajwid", "note", "saya pemula dalam tajwid"),
+    ],
+)
+def test_detect_pref_intent_matches(text: str, field: str, value: str) -> None:
+    from muslim_bot.telegram_bot import detect_pref_intent
+
+    intent = detect_pref_intent(text)
+
+    assert intent is not None
+    assert (intent.field, intent.value) == (field, value)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "hadis tentang niat",
+        "jelaskan niat dengan singkat dan beri dalilnya",
+        "bagaimana hukum jawab singkat dalam salat",
+        "apa itu bahasa inggris dalam islam",
+        "/gaya ringkas",
+        "ingat",
+        "",
+    ],
+)
+def test_detect_pref_intent_ignores_real_questions(text: str) -> None:
+    from muslim_bot.telegram_bot import detect_pref_intent
+
+    assert detect_pref_intent(text) is None
+
+
+class PrefChatMessage(CommandMessage):
+    def __init__(self, text: str = "") -> None:
+        super().__init__()
+        self.text = text
+
+
+def test_pref_message_asks_confirmation_then_saves(monkeypatch) -> None:
+    import muslim_bot.telegram_bot as tg_bot
+
+    async def fail_post(*args, **kwargs):
+        raise AssertionError("a preference message must not reach the LLM backend")
+
+    monkeypatch.setattr(tg_bot, "post_chat", fail_post)
+    chat_data: dict = {}
+    context = SimpleNamespace(
+        bot_data={"settings": SimpleNamespace(telegram_api_base="http://x")}, args=[], chat_data=chat_data
+    )
+
+    message = PrefChatMessage("jawab singkat saja")
+    asyncio.run(tg_bot.text_handler(SimpleNamespace(message=message), context))
+    assert "/ya" in message.replies[0] and "ringkas" in message.replies[0]
+    assert tg_bot.PENDING_KEY in chat_data
+
+    calls: list[tuple] = []
+
+    async def fake_backend(settings, method, path, chat_id, json=None):
+        calls.append((method, path, json))
+        return {}
+
+    monkeypatch.setattr(tg_bot, "backend_call", fake_backend)
+    confirm = PrefChatMessage()
+    asyncio.run(tg_bot.confirm_pref_command(SimpleNamespace(message=confirm), context))
+
+    assert calls == [("PUT", "prefs", {"style": "ringkas"})]
+    assert "Tersimpan" in confirm.replies[0]
+    assert tg_bot.PENDING_KEY not in chat_data
+
+
+def test_pref_message_can_be_cancelled_and_confirm_without_pending(monkeypatch) -> None:
+    import muslim_bot.telegram_bot as tg_bot
+
+    chat_data: dict = {tg_bot.PENDING_KEY: tg_bot.PrefIntent("style", "ringkas", "Gaya jawaban: ringkas")}
+    context = SimpleNamespace(bot_data={}, args=[], chat_data=chat_data)
+
+    cancel = PrefChatMessage()
+    asyncio.run(tg_bot.cancel_pref_command(SimpleNamespace(message=cancel), context))
+    assert cancel.replies == ["Dibatalkan."]
+
+    confirm = PrefChatMessage()
+    asyncio.run(tg_bot.confirm_pref_command(SimpleNamespace(message=confirm), context))
+    assert "Tidak ada pengaturan" in confirm.replies[0]
