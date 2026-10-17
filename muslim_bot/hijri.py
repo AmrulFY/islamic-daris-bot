@@ -50,6 +50,9 @@ FALLBACK_NOTE = (
 )
 
 CACHE_TTL_SECONDS = 12 * 3600
+# When the API cannot be reached, data it gave earlier is still better than a local estimate (the Kemenag
+# table rarely changes), for this long after it went stale.
+STALE_MAX_SECONDS = 30 * 24 * 3600
 # After a failed API call, go straight to the local calculation for a while so a
 # dead service does not add its timeout to every reply.
 FAILURE_COOLDOWN_SECONDS = 60.0
@@ -483,6 +486,8 @@ class HijriCalendar:
             else:
                 self._events_cache[year] = (time.monotonic() + CACHE_TTL_SECONDS, result)
                 return result
+        if cached is not None and time.monotonic() - cached[0] < STALE_MAX_SECONDS:
+            return cached[1]
         return with_derived_events(calculate_events(year))
 
     async def _extra_events(self, year: int) -> list[HijriEvent]:
@@ -509,7 +514,7 @@ class HijriCalendar:
     async def _extra_event(self, key: str, hijri_year: int, estimate: date) -> HijriEvent:
         name, (month, day) = EVENT_DEFS[key]
         label = f"{hijri_year:04d}-{month:02d}-{day:02d}"
-        if self._api_usable():
+        if self.enabled and time.monotonic() >= self._down_until:
             try:
                 payload = await self._get_json(f"{self.api_base}/convert", {"date": label, "calendar": "hijri"})
                 out = payload["output"]
@@ -534,6 +539,8 @@ class HijriCalendar:
             else:
                 self._cache[day] = (time.monotonic() + CACHE_TTL_SECONDS, result)
                 return result
+        if cached is not None and time.monotonic() - cached[0] < STALE_MAX_SECONDS:
+            return cached[1]
         # Fallback results are not cached: the next call should retry the API once the cooldown ends.
         return calculate_hijri(day)
 
@@ -541,11 +548,19 @@ class HijriCalendar:
         return parse_api_response(await self._get_json(f"{self.api_base}/today/{day.isoformat()}"))
 
     async def _get_json(self, url: str, params: dict | None = None) -> dict:
-        if self._client is not None:
-            response = await self._client.get(url, params=params, timeout=self.timeout_seconds)
-        else:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(url, params=params, timeout=self.timeout_seconds)
+        # api.mabims.dev sometimes stalls while connecting. Nothing was sent then, so trying once more is safe
+        # and usually succeeds; a slow or failing answer (read timeout, HTTP error) is not retried.
+        for attempt in (1, 2):
+            try:
+                if self._client is not None:
+                    response = await self._client.get(url, params=params, timeout=self.timeout_seconds)
+                else:
+                    async with httpx.AsyncClient() as client:
+                        response = await client.get(url, params=params, timeout=self.timeout_seconds)
+                break
+            except (httpx.ConnectTimeout, httpx.ConnectError):
+                if attempt == 2:
+                    raise
         response.raise_for_status()
         return response.json()
 

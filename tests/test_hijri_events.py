@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import httpx
 import pytest
@@ -60,15 +60,38 @@ def test_calculate_events_local_fallback():
     assert hijri.calculate_events(2200) == []
 
 
+def routed(convert_offset_days: int | None = 1, source: str = "mabims-computed"):
+    """A fake MABIMS: /events returns the 2027 payload; /convert is Umm al-Qura shifted by `convert_offset_days`.
+
+    The shift makes an answer from the API distinguishable from the local estimate. `None` makes /convert fail.
+    """
+    from hijridate import Hijri
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/events"):
+            return httpx.Response(200, json=EVENTS_PAYLOAD_2027)
+        if convert_offset_days is None:
+            return httpx.Response(500)
+        year, month, day = (int(part) for part in request.url.params["date"].split("-"))
+        local = Hijri(year, month, day).to_gregorian()
+        shifted = date(local.year, local.month, local.day) + timedelta(days=convert_offset_days)
+        output = {"year": shifted.year, "month": shifted.month, "day": shifted.day}
+        return httpx.Response(200, json={"output": output, "source": source})
+
+    return handler
+
+
 def test_events_use_api_and_cache():
-    calendar, requests = make_calendar(lambda request: httpx.Response(200, json=EVENTS_PAYLOAD_2027))
+    calendar, requests = make_calendar(routed())
     first = run(calendar.events(2027))
+    after_first = len(requests)
     second = run(calendar.events(2027))
     assert first == second
     assert by_key(first)["idul_adha"].source == SOURCE_COMPUTED
-    assert len(requests) == 1
-    assert requests[0].url.params["year"] == "2027"
-    assert requests[0].url.params["calendar"] == "gregorian"
+    assert len(requests) == after_first  # the repeat came from the cache
+    events_request = next(r for r in requests if r.url.path.endswith("/events"))
+    assert events_request.url.params["year"] == "2027"
+    assert events_request.url.params["calendar"] == "gregorian"
 
 
 @pytest.mark.parametrize(
@@ -307,3 +330,79 @@ def test_new_dalil_topic_after_calendar_questions_drops_the_calendar():
     assert not hijri.wants_calendar("hadits tentang niat?", chain)
     assert hijri.wants_calendar("kalau idul fitri?", chain)
     assert hijri.is_calendar_related("kapan puasa arafah")  # a calendar question that names puasa still counts
+
+
+# --- Isra Miraj and Nisfu Syaban ---------------------------------------------------------------------------
+
+
+def extras(events):
+    return [event for event in events if event.key in hijri.EXTRA_EVENT_KEYS]
+
+
+def test_isra_miraj_and_nisfu_syaban_come_from_convert_with_the_apis_own_dates_and_source():
+    from hijridate import Hijri
+
+    calendar, requests = make_calendar(routed(convert_offset_days=1, source="mabims"))
+    found = extras(run(calendar.events(2027)))
+
+    names = [(event.name, event.hijri) for event in found]
+    # 27 Rajab 1448 and 15 Sya'ban 1448 fall in early 2027; 27 Rajab 1449 falls in December 2027.
+    assert names == [("Isra Miraj", "1448-07-27"), ("Nisfu Syaban", "1448-08-15"), ("Isra Miraj", "1449-07-27")]
+    assert all(event.day.year == 2027 and event.source == "mabims" for event in found)
+    local = Hijri(1448, 7, 27).to_gregorian()
+    assert found[0].day == date(local.year, local.month, local.day) + timedelta(days=1)  # the API's answer, not ours
+    convert_requests = [r for r in requests if r.url.path.endswith("/convert")]
+    assert {r.url.params["date"] for r in convert_requests} >= {"1448-07-27", "1448-08-15", "1449-07-27"}
+    assert all(r.url.params["calendar"] == "hijri" for r in convert_requests)
+
+
+def test_only_dates_that_fall_in_the_year_are_kept():
+    calendar, _ = make_calendar(routed())
+    for year in (2026, 2027, 2028):
+        found = extras(run(calendar.events(year)))
+        assert found and all(event.day.year == year for event in found)
+
+
+@pytest.mark.parametrize("response", [httpx.Response(500), httpx.Response(200, json={"unexpected": True}), httpx.Response(200, text="oops")])
+def test_a_failing_convert_falls_back_to_the_local_estimate_without_losing_the_rest(response):
+    def handler(request):
+        return httpx.Response(200, json=EVENTS_PAYLOAD_2027) if request.url.path.endswith("/events") else response
+
+    calendar, _ = make_calendar(handler)
+    events = run(calendar.events(2027))
+
+    assert by_key(events)["idul_adha"].source == SOURCE_COMPUTED  # the holidays from /events are untouched
+    found = extras(events)
+    assert {event.name for event in found} == {"Isra Miraj", "Nisfu Syaban"}
+    assert all(event.source == SOURCE_FALLBACK for event in found)  # honestly labelled as an estimate
+
+
+def test_the_local_fallback_knows_the_new_holidays_too():
+    calendar, _ = make_calendar(lambda request: httpx.Response(500))
+    found = extras(run(calendar.events(2026)))
+    assert {event.name for event in found} == {"Isra Miraj", "Nisfu Syaban"}
+    assert all(event.source == SOURCE_FALLBACK and event.day.year == 2026 for event in found)
+    isra = next(event for event in found if event.key == "isra_miraj")
+    assert isra.hijri.endswith("-07-27") and date(2026, 1, 14) <= isra.day <= date(2026, 1, 18)  # 16 Jan 2026
+
+
+def test_the_calendar_context_lists_them_with_hijri_dates():
+    calendar, _ = make_calendar(routed(convert_offset_days=0, source="mabims-computed"))
+    events = run(calendar.events(2027))
+    text = hijri.format_calendar_context(TODAY, parse_api_response(TABLE_PAYLOAD), events)
+
+    assert "- Isra Miraj: Selasa, 5 Januari 2027 (27 Rajab 1448 H) [akan datang, 80 hari lagi; perkiraan hitungan MABIMS]" in text
+    assert "- Nisfu Syaban: Sabtu, 23 Januari 2027 (15 Sya'ban 1448 H)" in text
+    assert "sidang isbat" not in next(line for line in text.splitlines() if line.startswith("- Isra Miraj"))
+
+
+@pytest.mark.parametrize("message", ["kapan Isra Miraj?", "kapan israk mikraj", "kapan nisfu sya'ban tahun ini", "tanggal isra mi'raj"])
+def test_questions_about_the_new_holidays_get_the_calendar(message):
+    assert hijri.is_calendar_related(message)
+
+
+def test_the_llm_is_no_longer_told_these_holidays_are_missing():
+    from muslim_bot.agent import PIPELINE_INSTRUCTIONS
+
+    assert "Isra Miraj" not in PIPELINE_INSTRUCTIONS and "Nisfu Syaban" not in PIPELINE_INSTRUCTIONS
+    assert "Nuzulul Quran" in PIPELINE_INSTRUCTIONS  # the example of a date it really does not have
