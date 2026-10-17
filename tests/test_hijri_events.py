@@ -404,5 +404,6 @@ def test_questions_about_the_new_holidays_get_the_calendar(message):
 def test_the_llm_is_no_longer_told_these_holidays_are_missing():
     from muslim_bot.agent import PIPELINE_INSTRUCTIONS
 
-    assert "Isra Miraj" not in PIPELINE_INSTRUCTIONS and "Nisfu Syaban" not in PIPELINE_INSTRUCTIONS
-    assert "Nuzulul Quran" in PIPELINE_INSTRUCTIONS  # the example of a date it really does not have
+    missing_rule = next(line for line in PIPELINE_INSTRUCTIONS.splitlines() if "yang tidak tercantum" in line)
+    assert "Isra Miraj" not in missing_rule and "Nisfu Syaban" not in missing_rule
+    assert "Nuzulul Quran" in missing_rule  # the example of a date it really does not have
