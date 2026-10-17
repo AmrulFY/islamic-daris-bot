@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from datetime import date, datetime
+from collections.abc import Sequence
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import httpx
-from hijridate import Gregorian
+from hijridate import Gregorian, Hijri
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +206,240 @@ def parse_api_response(payload: dict) -> HijriDate:
         raise ValueError(f"unexpected MABIMS response: {payload!r}") from exc
 
 
+# --- Islamic holidays ---------------------------------------------------------------
+
+# key -> (display name, (hijri month, hijri day)). The API's own event keys; the day is
+# what the local fallback calculates when the API is down.
+EVENT_DEFS: dict[str, tuple[str, tuple[int, int]]] = {
+    "awal_ramadan": ("Awal Ramadan", (9, 1)),
+    "idul_fitri": ("Idul Fitri", (10, 1)),
+    "idul_adha": ("Idul Adha", (12, 10)),
+    "1_muharram": ("Tahun Baru Islam", (1, 1)),
+    "maulid_nabi": ("Maulid Nabi Muhammad SAW", (3, 12)),
+}
+
+# Events whose date the government confirms at sidang isbat.
+ISBAT_EVENTS = frozenset({"awal_ramadan", "idul_fitri", "idul_adha", "puasa_ramadan"})
+
+SOURCE_LABELS = {
+    SOURCE_TABLE: "tabel kalender Kemenag",
+    SOURCE_COMPUTED: "perkiraan hitungan MABIMS",
+    SOURCE_FALLBACK: "perkiraan hitungan Umm al-Qura",
+}
+
+
+@dataclass(frozen=True)
+class HijriEvent:
+    key: str
+    name: str
+    day: date
+    source: str
+    hijri: str | None = None  # "1448-09-01" when known
+    end: date | None = None  # last day, for events that span several days
+
+    @property
+    def last_day(self) -> date:
+        return self.end or self.day
+
+
+def parse_events_response(payload: dict) -> list[HijriEvent]:
+    """Turn an `/events` response into events. Raises ValueError on any surprise."""
+    try:
+        events = [
+            HijriEvent(
+                key=str(item["event"]),
+                name=EVENT_DEFS.get(str(item["event"]), (str(item["name"]), (0, 0)))[0],
+                day=date.fromisoformat(str(item["gregorian"])),
+                source=str(item["source"]),
+                hijri=str(item["hijri"]),
+            )
+            for item in payload["events"]
+        ]
+    except (KeyError, TypeError) as exc:
+        raise ValueError(f"unexpected MABIMS events response: {payload!r}") from exc
+    return events
+
+
+def calculate_events(year: int) -> list[HijriEvent]:
+    """Local Umm al-Qura holidays that fall in Gregorian `year` (fallback when the API is down)."""
+    try:
+        first_hijri_year = Gregorian(year, 1, 1).to_hijri().year
+    except (OverflowError, ValueError):
+        return []
+    events: list[HijriEvent] = []
+    for hijri_year in range(first_hijri_year - 1, first_hijri_year + 3):
+        for key, (name, (month, day)) in EVENT_DEFS.items():
+            try:
+                gregorian = Hijri(hijri_year, month, day).to_gregorian()
+            except (OverflowError, ValueError):
+                continue
+            if gregorian.year == year:
+                events.append(
+                    HijriEvent(
+                        key,
+                        name,
+                        date(gregorian.year, gregorian.month, gregorian.day),
+                        SOURCE_FALLBACK,
+                        f"{hijri_year:04d}-{month:02d}-{day:02d}",
+                    )
+                )
+    return events
+
+
+def with_derived_events(events: list[HijriEvent]) -> list[HijriEvent]:
+    """Add the fasts that follow from a holiday date, so the LLM never has to count days.
+
+    Ramadan runs until the day before Idul Fitri, Arafah is the day before Idul Adha, and
+    Tasu'a / Asyura are the 9th and 10th of Muharram.
+    """
+    by_key = {event.key: event for event in events}
+    derived: list[HijriEvent] = []
+    start, fitri = by_key.get("awal_ramadan"), by_key.get("idul_fitri")
+    if start and fitri and 0 < (fitri.day - start.day).days <= 31:
+        derived.append(
+            HijriEvent("puasa_ramadan", "Puasa Ramadan", start.day, start.source, start.hijri, fitri.day - timedelta(days=1))
+        )
+    if adha := by_key.get("idul_adha"):
+        derived.append(HijriEvent("puasa_arafah", "Puasa Arafah (9 Dzulhijjah)", adha.day - timedelta(days=1), adha.source))
+    if muharram := by_key.get("1_muharram"):
+        derived.append(HijriEvent("puasa_tasua", "Puasa Tasu'a (9 Muharram)", muharram.day + timedelta(days=8), muharram.source))
+        derived.append(HijriEvent("puasa_asyura", "Puasa Asyura (10 Muharram)", muharram.day + timedelta(days=9), muharram.source))
+    return sorted([*events, *derived], key=lambda event: (event.day, event.key))
+
+
+def _hijri_label(value: str) -> str:
+    year, month, day = (int(part) for part in value.split("-"))
+    return f"{day} {MONTH_NAMES[month - 1]} {year} H"
+
+
+def _event_line(event: HijriEvent, today: date) -> str:
+    when = format_gregorian(event.day)
+    if event.end:
+        when += f" sampai {format_gregorian(event.end)}"
+    if event.hijri and not event.end:
+        when += f" ({_hijri_label(event.hijri)})"
+    if event.last_day < today:
+        status = "sudah lewat"
+    elif event.day <= today:
+        status = "sedang berlangsung" if event.end else "hari ini"
+    else:
+        status = f"akan datang, {(event.day - today).days} hari lagi"
+    notes = [status, SOURCE_LABELS.get(event.source, event.source)]
+    if event.key in ISBAT_EVENTS and event.last_day >= today:
+        notes.append("penetapan resmi oleh pemerintah melalui sidang isbat")
+    return f"- {event.name}: {when} [{'; '.join(notes)}]"
+
+
+def format_calendar_context(today: date, today_hijri: HijriDate | None, events: list[HijriEvent]) -> str:
+    """The "KONTEKS KALENDER" block appended to the LLM prompt."""
+    lines = ["KONTEKS KALENDER (dari layanan kalender; satu-satunya sumber tanggal, jangan menghitung atau menebak tanggal sendiri):"]
+    if today_hijri is not None:
+        label = SOURCE_LABELS.get(today_hijri.source, today_hijri.source)
+        lines.append(
+            f"Hari ini: {format_gregorian(today)} = {today_hijri.day} {today_hijri.month_name} {today_hijri.year} H [{label}]"
+        )
+    else:
+        lines.append(f"Hari ini: {format_gregorian(today)} (tanggal Hijriyah tidak tersedia)")
+    for year in sorted({event.day.year for event in events}):
+        lines.append(f"Hari besar dan puasa tahun {year}:")
+        lines.extend(_event_line(event, today) for event in events if event.day.year == year)
+    if not events:
+        lines.append("Data hari besar Islam tidak tersedia saat ini.")
+    return "\n".join(lines)
+
+
+# Words that always mean "calendar question". Event words only count together with a
+# "when" cue, so "hadits tentang keutamaan puasa" stays a normal dalil search.
+_CALENDAR_WORDS = _HIJRI_WORDS + ("tahun baru islam", "hari besar islam", "kalender hijr")
+_EVENT_WORDS = (
+    "ramadan",
+    "ramadhan",
+    "puasa",
+    "lebaran",
+    "idul",
+    "idhul",
+    "iedul",
+    "maulid",
+    "muharram",
+    "asyura",
+    "arafah",
+    "tasua",
+    "tasu'a",
+    "miraj",
+    "mi'raj",
+    "nisfu",
+    "syaban",
+    "sya'ban",
+    "rajab",
+    "syawal",
+    "dzulhijjah",
+    "zulhijah",
+)
+_WHEN_CUES = (
+    "kapan",
+    "tanggal",
+    "tahun ini",
+    "tahun depan",
+    "tahun lalu",
+    "bulan depan",
+    "hari ini",
+    "besok",
+    "jadwal",
+    "mulai",
+    "lagi",
+    "berapa hari",
+)
+FOLLOW_UP_MAX_CHARS = 80
+# A short message that asks for a specific dalil is a new topic, not a follow-up of the calendar question.
+_NEW_DALIL_TOPIC_WORDS = ("ayat", "hadits", "hadis", "hadith", "dalil", "surah", "surat", "doa")
+
+
+def _names_new_dalil_topic(message: str) -> bool:
+    words = set(message.lower().replace("?", " ").replace("!", " ").split())
+    return any(word in words for word in _NEW_DALIL_TOPIC_WORDS)
+
+
+def is_calendar_related(message: str) -> bool:
+    text = " ".join(message.lower().replace("?", " ").replace("!", " ").split())
+    if any(word in text for word in _CALENDAR_WORDS):
+        return True
+    return any(word in text for word in _EVENT_WORDS) and any(cue in text for cue in _WHEN_CUES)
+
+
+def wants_calendar(message: str, previous_user: str | Sequence[str] | None = None) -> bool:
+    """True when the answer needs calendar data: the message asks, or it follows up a calendar question.
+
+    `previous_user` are the user's earlier messages (latest last), so a chain of short
+    follow-ups ("kalau tahun depan?" -> "dan Idul Fitri?") keeps the calendar.
+    """
+    if is_calendar_related(message):
+        return True
+    if not previous_user or len(message) > FOLLOW_UP_MAX_CHARS or _names_new_dalil_topic(message):
+        return False
+    earlier = [previous_user] if isinstance(previous_user, str) else list(previous_user)
+    return any(is_calendar_related(text) for text in earlier)
+
+
+async def build_calendar_context(
+    calendar: "HijriCalendar", message: str, previous_user: str | Sequence[str] | None = None
+) -> str | None:
+    """Calendar block for `message`, or None when it is not a calendar question (or nothing worked)."""
+    if not wants_calendar(message, previous_user):
+        return None
+    today = today_in()
+    try:
+        today_hijri, this_year, next_year = await asyncio.gather(
+            calendar.convert(today), calendar.events(today.year), calendar.events(today.year + 1)
+        )
+    except Exception:  # noqa: BLE001 - a calendar problem must never break the answer.
+        logger.exception("could not build calendar context")
+        return None
+    events = [*this_year, *next_year]
+    if today_hijri is None and not events:
+        return None
+    return format_calendar_context(today, today_hijri, events)
+
+
 class HijriCalendar:
     """Hijri dates from the MABIMS API, falling back to a local calculation when it is down."""
 
@@ -220,7 +456,27 @@ class HijriCalendar:
         self.timeout_seconds = timeout_seconds
         self._client = client
         self._cache: dict[date, tuple[float, HijriDate]] = {}
+        self._events_cache: dict[int, tuple[float, list[HijriEvent]]] = {}
         self._down_until = 0.0
+
+    async def events(self, year: int) -> list[HijriEvent]:
+        """Islamic holidays and the fasts that follow from them in Gregorian `year`, in date order."""
+        cached = self._events_cache.get(year)
+        if cached is not None and cached[0] > time.monotonic():
+            return cached[1]
+        if self.enabled and time.monotonic() >= self._down_until:
+            try:
+                payload = await self._get_json(f"{self.api_base}/events", {"year": year, "calendar": "gregorian"})
+                result = with_derived_events(parse_events_response(payload))
+                if not result:
+                    raise ValueError("MABIMS returned no events")
+            except (httpx.HTTPError, ValueError) as exc:
+                self._down_until = time.monotonic() + FAILURE_COOLDOWN_SECONDS
+                logger.warning("MABIMS events unavailable (%r), using local calculation", exc)
+            else:
+                self._events_cache[year] = (time.monotonic() + CACHE_TTL_SECONDS, result)
+                return result
+        return with_derived_events(calculate_events(year))
 
     async def convert(self, day: date | None = None) -> HijriDate | None:
         """Hijri date for `day` (default: today in Jakarta). None only if every source fails."""
@@ -241,11 +497,21 @@ class HijriCalendar:
         return calculate_hijri(day)
 
     async def _fetch(self, day: date) -> HijriDate:
-        url = f"{self.api_base}/today/{day.isoformat()}"
+        return parse_api_response(await self._get_json(f"{self.api_base}/today/{day.isoformat()}"))
+
+    async def _get_json(self, url: str, params: dict | None = None) -> dict:
         if self._client is not None:
-            response = await self._client.get(url, timeout=self.timeout_seconds)
+            response = await self._client.get(url, params=params, timeout=self.timeout_seconds)
         else:
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, timeout=self.timeout_seconds)
+                response = await client.get(url, params=params, timeout=self.timeout_seconds)
         response.raise_for_status()
-        return parse_api_response(response.json())
+        return response.json()
+
+
+def calendar_from_settings(settings) -> HijriCalendar:
+    return HijriCalendar(
+        settings.hijri_api_base,
+        enabled=settings.hijri_api_enabled,
+        timeout_seconds=settings.hijri_api_timeout_seconds,
+    )

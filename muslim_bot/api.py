@@ -21,8 +21,10 @@ from .db_status import hadith_db_ready, quran_db_ready
 from .hijri import (
     UNAVAILABLE_MESSAGE,
     HijriCalendar,
+    calendar_from_settings,
     detect_hijri_query,
     format_today_message,
+    is_calendar_related,
     today_in,
 )
 from .rate_limit import RateLimiter
@@ -140,12 +142,7 @@ def get_runner() -> MuslimBotRunner:
 
 @lru_cache(maxsize=1)
 def get_hijri_calendar() -> HijriCalendar:
-    settings = get_settings()
-    return HijriCalendar(
-        settings.hijri_api_base,
-        enabled=settings.hijri_api_enabled,
-        timeout_seconds=settings.hijri_api_timeout_seconds,
-    )
+    return calendar_from_settings(get_settings())
 
 
 async def try_calendar_reply(message: str) -> AgentReply | None:
@@ -265,7 +262,8 @@ async def chat(
     language = prefs.language or request.language
     history_prompt = store.history_prompt(session_id, request.message)
     has_history = history_prompt != request.message
-    use_cache = not has_history and not prefs.customizes_answer
+    # Calendar answers mention "today" and days remaining, so they go stale within a day.
+    use_cache = not has_history and not prefs.customizes_answer and not is_calendar_related(request.message)
     history_prompt = _with_prefs(prefs, history_prompt)
     recent_turns = store.recent_turns(session_id, limit=_recent_limit(prefs))
 
@@ -433,7 +431,8 @@ async def chat_stream(
     language = prefs.language or request.language
     history_prompt = store.history_prompt(session_id, request.message)
     has_history = history_prompt != request.message
-    use_cache = not has_history and not prefs.customizes_answer
+    # Calendar answers mention "today" and days remaining, so they go stale within a day.
+    use_cache = not has_history and not prefs.customizes_answer and not is_calendar_related(request.message)
     history_prompt = _with_prefs(prefs, history_prompt)
     recent_turns = store.recent_turns(session_id, limit=_recent_limit(prefs))
     idle_timeout = runtime_config.agent_timeout_seconds

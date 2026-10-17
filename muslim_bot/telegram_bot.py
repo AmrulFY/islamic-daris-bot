@@ -14,7 +14,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from telegram.request import HTTPXRequest
 
 from .config import Settings, load_settings
-from .hijri import UNAVAILABLE_MESSAGE, HijriCalendar, format_today_message, today_in
+from .hijri import UNAVAILABLE_MESSAGE, HijriCalendar, calendar_from_settings, format_today_message, today_in
 from .progress_messages import classify_progress, pick_progress
 
 logger = logging.getLogger(__name__)
@@ -589,11 +589,7 @@ def build_application(settings: Settings) -> Application:
         builder = builder.proxy(settings.telegram_proxy).get_updates_proxy(settings.telegram_proxy)
     application = builder.build()
     application.bot_data["settings"] = settings
-    application.bot_data["hijri"] = HijriCalendar(
-        settings.hijri_api_base,
-        enabled=settings.hijri_api_enabled,
-        timeout_seconds=settings.hijri_api_timeout_seconds,
-    )
+    application.bot_data["hijri"] = calendar_from_settings(settings)
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("hijriyah", hijri_command))
     application.add_handler(CommandHandler("reset", reset_command))
