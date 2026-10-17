@@ -245,7 +245,7 @@ class ProgressFakeMessage:
     async def reply_text(self, text: str, parse_mode=None):
         from types import SimpleNamespace
 
-        from muslim_bot.telegram_bot import PROGRESS_REPLY
+        from muslim_bot.progress_messages import ALL_PROGRESS_TEXTS
 
         call = SimpleNamespace(text=text, parse_mode=parse_mode, deleted=False)
 
@@ -253,7 +253,7 @@ class ProgressFakeMessage:
             call.deleted = True
 
         call.delete = delete
-        if text == PROGRESS_REPLY and self.progress is None:
+        if text in ALL_PROGRESS_TEXTS and self.progress is None:
             self.progress = call
         else:
             self.calls.append(call)
@@ -270,11 +270,13 @@ def test_text_handler_shows_and_removes_progress(monkeypatch) -> None:
         assert api_base == "http://x"
         assert chat_id == 7
         assert user_id == 9
+        await asyncio.sleep(0.1)
         return {"answer": "Jawaban.", "references": [], "warnings": []}
 
     monkeypatch.setattr(tg_bot, "post_chat", fake_post)
+    monkeypatch.setattr(tg_bot, "PROGRESS_DELAY_SECONDS", 0.01)
 
-    message = ProgressFakeMessage("halo")
+    message = ProgressFakeMessage("hadis tentang niat")
     update = SimpleNamespace(message=message)
     context = SimpleNamespace(bot_data={"settings": SimpleNamespace(telegram_api_base="http://x")})
 

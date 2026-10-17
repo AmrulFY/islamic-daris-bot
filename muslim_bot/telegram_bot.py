@@ -14,6 +14,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from telegram.request import HTTPXRequest
 
 from .config import Settings, load_settings
+from .progress_messages import classify_progress, pick_progress
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,10 @@ ERROR_REPLY = (
     "Jika berlanjut, coba mulai chat baru dengan /start atau /reset."
 )
 
-PROGRESS_REPLY = "🔍 Sebentar ya, saya carikan dalilnya…"
+# Show the waiting message only if the answer takes longer than this, so instant
+# replies (fast path, cache) do not flash a message that is deleted right away.
+PROGRESS_DELAY_SECONDS = 1.5
+PROGRESS_STATE_KEY = "progress_last"
 
 LOOP_REPLY = (
     "Pertanyaan ini membutuhkan banyak langkah dan saya kehabisan batas iterasi. "
@@ -455,6 +459,34 @@ async def cancel_pref_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     await message.reply_text("Dibatalkan." if had_pending else "Tidak ada pengaturan yang menunggu konfirmasi.")
 
 
+async def progress_after_delay(message, text: str, done: asyncio.Event, delay: float):
+    """Send the waiting message unless `done` is set within `delay` seconds.
+
+    Returns the sent message (to delete later) or None. Never cancelled: the
+    caller sets `done` and awaits, so a send in flight cannot be orphaned.
+    """
+    try:
+        await asyncio.wait_for(done.wait(), timeout=delay)
+        return None
+    except asyncio.TimeoutError:
+        pass
+    try:
+        return await message.reply_text(text)
+    except TelegramError:
+        logger.warning("Progress message failed, continuing anyway")
+        return None
+
+
+def choose_progress_text(text: str, store: dict | None) -> str | None:
+    """Pick a waiting message for `text`, avoiding a repeat of the last one in this chat."""
+    category = classify_progress(text)
+    last = store.get(PROGRESS_STATE_KEY, {}) if store is not None else {}
+    chosen, index = pick_progress(category, last.get(category))
+    if chosen is not None and store is not None:
+        store[PROGRESS_STATE_KEY] = {**last, category: index}
+    return chosen
+
+
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.message
     if message is None or not message.text:
@@ -473,12 +505,14 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     settings: Settings = context.bot_data["settings"]
     stop_typing = asyncio.Event()
     typing_task = asyncio.create_task(typing_keepalive(message.chat, stop_typing))
+    answer_ready = asyncio.Event()
+    progress_text = choose_progress_text(message.text, store)
+    progress_task = (
+        asyncio.create_task(progress_after_delay(message, progress_text, answer_ready, PROGRESS_DELAY_SECONDS))
+        if progress_text is not None
+        else None
+    )
     try:
-        try:
-            progress = await message.reply_text(PROGRESS_REPLY)
-        except TelegramError:
-            logger.warning("Progress message failed, continuing anyway")
-            progress = None
         try:
             async with httpx.AsyncClient() as client:
                 body = await post_chat(
@@ -488,6 +522,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     message.chat_id,
                     message.from_user.id if message.from_user else message.chat_id,
                 )
+            answer_ready.set()
             reply = build_reply(
                 body.get("answer", ""),
                 body.get("references", []),
@@ -508,6 +543,8 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             except TelegramError:
                 logger.exception("Failed to send error reply")
         finally:
+            answer_ready.set()
+            progress = await progress_task if progress_task is not None else None
             if progress is not None:
                 try:
                     await progress.delete()
