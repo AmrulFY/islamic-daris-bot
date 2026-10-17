@@ -27,13 +27,13 @@ chat:
 	$(PYTHON) -m muslim_bot.cli --once "$(q)"
 
 compose-config:
-	docker compose -f deploy/docker-compose.openclaw.yml config
+	docker compose --env-file .env -f deploy/docker-compose.openclaw.yml config
 
 compose-up:
-	docker compose -f deploy/docker-compose.openclaw.yml up -d --build
+	docker compose --env-file .env -f deploy/docker-compose.openclaw.yml up -d --build
 
 compose-logs:
-	docker compose -f deploy/docker-compose.openclaw.yml logs -f muslim-bot
+	docker compose --env-file .env -f deploy/docker-compose.openclaw.yml logs -f muslim-bot
 
 clean:
 	rm -rf .pytest_cache
