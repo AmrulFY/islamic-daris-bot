@@ -112,6 +112,9 @@ class Settings:
     semantic_db_path: Path | None = None
     embedding_model: str = "text-embedding-3-small"
     embedding_dimensions: int = 512
+    hijri_api_enabled: bool = True
+    hijri_api_base: str = "https://api.mabims.dev/api/v1"
+    hijri_api_timeout_seconds: float = 3.0
 
     @property
     def has_openai_api_key(self) -> bool:
@@ -170,4 +173,7 @@ def load_settings(env_file: Path | None = PROJECT_ROOT / ".env") -> Settings:
         semantic_db_path=_path_from_env("SEMANTIC_DB_PATH", data_dir / "semantic.db"),
         embedding_model=os.getenv("EMBEDDING_MODEL") or "text-embedding-3-small",
         embedding_dimensions=_int_from_env("EMBEDDING_DIMENSIONS", 512),
+        hijri_api_enabled=_bool_from_env("HIJRI_API_ENABLED", True),
+        hijri_api_base=os.getenv("HIJRI_API_BASE") or "https://api.mabims.dev/api/v1",
+        hijri_api_timeout_seconds=_float_from_env("HIJRI_API_TIMEOUT_SECONDS", 3.0),
     )

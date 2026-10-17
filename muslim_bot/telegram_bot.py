@@ -14,6 +14,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from telegram.request import HTTPXRequest
 
 from .config import Settings, load_settings
+from .hijri import UNAVAILABLE_MESSAGE, HijriCalendar, format_today_message, today_in
 from .progress_messages import classify_progress, pick_progress
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,7 @@ Saya dapat membantu Anda:
 🔍 Menampilkan ayat/hadith spesifik — misalnya "ayat kursi" atau "Sahih al-Bukhari #1"
 🎲 Ayat & hadith acak untuk tadabbur harian
 💡 Menjelaskan konsep dasar Islam dalam Bahasa Indonesia dan Inggris
+📅 Tanggal Hijriyah hari ini — ketik /hijriyah
 
 Setiap rujukan saya tandai terverifikasi dari database. Saya bersifat edukatif — bukan mufti atau ustaz — dan untuk persoalan hukum agama yang spesifik, saya akan menyarankan Anda bertanya langsung ke ulama yang kompeten.
 
@@ -284,6 +286,19 @@ async def forget_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await message.reply_text(ERROR_REPLY)
         return
     await message.reply_text("Riwayat dan semua pengaturan Anda sudah dihapus.")
+
+
+async def hijri_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.message
+    if message is None:
+        return
+    calendar: HijriCalendar = context.bot_data["hijri"]
+    today = today_in()
+    hijri = await calendar.convert(today)
+    if hijri is None:
+        await message.reply_text(UNAVAILABLE_MESSAGE)
+        return
+    await send_reply(message, markdown_to_html(format_today_message(hijri, today)))
 
 
 async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -574,7 +589,13 @@ def build_application(settings: Settings) -> Application:
         builder = builder.proxy(settings.telegram_proxy).get_updates_proxy(settings.telegram_proxy)
     application = builder.build()
     application.bot_data["settings"] = settings
+    application.bot_data["hijri"] = HijriCalendar(
+        settings.hijri_api_base,
+        enabled=settings.hijri_api_enabled,
+        timeout_seconds=settings.hijri_api_timeout_seconds,
+    )
     application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("hijriyah", hijri_command))
     application.add_handler(CommandHandler("reset", reset_command))
     application.add_handler(CommandHandler("lupa", forget_command))
     application.add_handler(CommandHandler("settings", settings_command))

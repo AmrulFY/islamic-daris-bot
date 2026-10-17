@@ -18,6 +18,13 @@ from .agent import AgentLoopLimitError, AgentReply, MuslimBotRunner, list_mcp_to
 from .answer_cache import AnswerCache
 from .config import PROJECT_ROOT, Settings, load_settings
 from .db_status import hadith_db_ready, quran_db_ready
+from .hijri import (
+    UNAVAILABLE_MESSAGE,
+    HijriCalendar,
+    detect_hijri_query,
+    format_today_message,
+    today_in,
+)
 from .rate_limit import RateLimiter
 from .runtime_config import RuntimeConfig, RuntimeConfigStore
 from .schemas import (
@@ -132,6 +139,27 @@ def get_runner() -> MuslimBotRunner:
 
 
 @lru_cache(maxsize=1)
+def get_hijri_calendar() -> HijriCalendar:
+    settings = get_settings()
+    return HijriCalendar(
+        settings.hijri_api_base,
+        enabled=settings.hijri_api_enabled,
+        timeout_seconds=settings.hijri_api_timeout_seconds,
+    )
+
+
+async def try_calendar_reply(message: str) -> AgentReply | None:
+    """Answer "tanggal hijriyah hari ini" from the calendar service, no LLM involved."""
+    if not detect_hijri_query(message):
+        return None
+    today = today_in()
+    hijri = await get_hijri_calendar().convert(today)
+    if hijri is None:
+        return AgentReply(answer=UNAVAILABLE_MESSAGE, used_tools=["hijri_calendar"])
+    return AgentReply(answer=format_today_message(hijri, today), used_tools=["hijri_calendar"])
+
+
+@lru_cache(maxsize=1)
 def get_config_store() -> RuntimeConfigStore:
     return RuntimeConfigStore(settings=get_settings())
 
@@ -242,6 +270,8 @@ async def chat(
     recent_turns = store.recent_turns(session_id, limit=_recent_limit(prefs))
 
     fast = runner.try_fast_path(request.message, language=language)
+    if fast is None:
+        fast = await try_calendar_reply(request.message)
     if fast is not None:
         store.append(session_id, request.message, fast.answer)
         return _reply_to_response(session_id, fast)
@@ -415,6 +445,8 @@ async def chat_stream(
 
     async def generate():
         fast = runner.try_fast_path(request.message, language=language)
+        if fast is None:
+            fast = await try_calendar_reply(request.message)
         if fast is not None:
             async for event in instant(fast):
                 yield event
