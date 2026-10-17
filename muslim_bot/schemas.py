@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from .runtime_config import RuntimeConfig
@@ -33,6 +35,10 @@ class PrefsUpdate(BaseModel):
     style: str | None = Field(default=None, pattern="^(ringkas|lengkap)$")
     note: str | None = Field(default=None, max_length=200)
     history_turns: int | None = Field(default=None, ge=0)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    timezone: str | None = Field(default=None, max_length=64)
+    location_label: str | None = Field(default=None, max_length=80)
 
 
 class PrefsResponse(BaseModel):
@@ -41,7 +47,42 @@ class PrefsResponse(BaseModel):
     style: str | None = None
     note: str | None = None
     history_turns: int | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    timezone: str | None = None
+    location_label: str | None = None
+    reminders_enabled: bool = False
+    reminder_prayers: list[str] = []
     max_history_turns: int
+
+
+class RemindersUpdate(BaseModel):
+    """Only the fields present in the request are changed."""
+
+    enabled: bool | None = None
+    prayers: list[str] | None = None
+
+
+class RemindersResponse(BaseModel):
+    session_id: str
+    enabled: bool
+    prayers: list[str]
+
+
+class SubscriptionResponse(BaseModel):
+    """One enabled reminder, for the bot that delivers them."""
+
+    session_id: str
+    latitude: float
+    longitude: float
+    timezone: str
+    location_label: str
+    prayers: list[str]
+    last_sent: datetime | None = None
+
+
+class ReminderSent(BaseModel):
+    sent_at: datetime
 
 
 class HistoryClearResponse(BaseModel):

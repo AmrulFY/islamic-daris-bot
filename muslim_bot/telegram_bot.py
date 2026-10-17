@@ -4,18 +4,33 @@ import asyncio
 import html
 import logging
 import re
+import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 import httpx
-from telegram import Update
+from telegram import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.constants import ChatAction, ParseMode
-from telegram.error import BadRequest, TelegramError
+from telegram.error import BadRequest, Forbidden, TelegramError
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 from telegram.request import HTTPXRequest
 
 from .config import Settings, load_settings
 from .hijri import UNAVAILABLE_MESSAGE, HijriCalendar, calendar_from_settings, format_today_message, today_in
+from .locations import find_city, nearest_city
+from .prayer_times import (
+    PRAYER_KEYS,
+    PRAYER_NAMES,
+    SavedLocation,
+    client_from_settings,
+    location_from_prefs,
+    schedule_reply,
+    tz_abbreviation,
+)
 from .progress_messages import classify_progress, pick_progress
+from .reminders import OFF_WORDS, ON_WORDS, due_reminders, parse_prayer_name, prayer_list, reminder_text
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +46,8 @@ Saya dapat membantu Anda:
 🎲 Ayat & hadith acak untuk tadabbur harian
 💡 Menjelaskan konsep dasar Islam dalam Bahasa Indonesia dan Inggris
 📅 Tanggal Hijriyah hari ini — ketik /hijriyah
+🕌 Jadwal sholat sesuai lokasi — atur dengan /lokasi, lihat dengan /jadwal
+⏰ Pengingat sholat tepat waktu, termasuk Imsak dan Terbit — nyalakan dengan /pengingat on
 
 Setiap rujukan saya tandai terverifikasi dari database. Saya bersifat edukatif — bukan mufti atau ustaz — dan untuk persoalan hukum agama yang spesifik, saya akan menyarankan Anda bertanya langsung ke ulama yang kompeten.
 
@@ -46,6 +63,8 @@ Ubah dengan:
 /gaya ringkas|lengkap — gaya jawaban
 /catatan <teks> — catatan gaya untuk bot (maks 200 karakter), /catatan hapus untuk menghapus
 /riwayat <0-{max_turns}> — jumlah percakapan terakhir yang diingat (0 = tidak mengingat)
+/lokasi — atur lokasi untuk jadwal sholat (/lokasi hapus untuk menghapus)
+/pengingat — pengingat sholat tepat waktu (on/off)
 /reset — hapus riwayat percakapan
 /lupa — hapus riwayat dan semua pengaturan
 
@@ -233,6 +252,8 @@ def format_prefs(prefs: dict) -> str:
             f"• Gaya: {show(prefs.get('style'))}",
             f"• Catatan: {show(prefs.get('note'))}",
             f"• Riwayat: {show(prefs.get('history_turns'))}",
+            f"• Lokasi: {prefs.get('location_label') or 'belum diatur'}",
+            f"• Pengingat: {format_reminder_summary(prefs)}",
         ]
     )
 
@@ -299,6 +320,412 @@ async def hijri_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await message.reply_text(UNAVAILABLE_MESSAGE)
         return
     await send_reply(message, markdown_to_html(format_today_message(hijri, today)))
+
+
+LOCATION_BUTTON = "📍 Kirim lokasi saya"
+# A pin is labelled with a listed city only when it is clearly in that city.
+PIN_LABEL_MAX_KM = 50.0
+
+LOCATION_HELP = """Untuk jadwal sholat, saya perlu lokasi Anda.
+
+📍 Ketuk tombol di bawah untuk mengirim lokasi Anda, atau ketik nama kota, misalnya:
+/lokasi Bandung
+/lokasi Depok, Jawa Barat
+
+Saya hanya menyimpan koordinat perkiraan (sekitar 1 km), bukan alamat. Hapus kapan saja dengan /lokasi hapus atau /lupa."""
+
+NO_LOCATION_REPLY = (
+    "Lokasi Anda belum diatur. Ketuk tombol di bawah untuk mengirim lokasi, "
+    "atau ketik /lokasi <nama kota>."
+)
+
+
+def location_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [[KeyboardButton(LOCATION_BUTTON, request_location=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+
+def saved_location(prefs: dict) -> SavedLocation | None:
+    return location_from_prefs(
+        SimpleNamespace(
+            latitude=prefs.get("latitude"),
+            longitude=prefs.get("longitude"),
+            timezone=prefs.get("timezone"),
+            location_label=prefs.get("location_label"),
+        )
+    )
+
+
+async def save_location_and_show(
+    message, context, *, latitude: float, longitude: float, timezone: str, label: str
+) -> None:
+    """Store the location for this chat, confirm it, and show today's schedule."""
+    settings: Settings = context.bot_data["settings"]
+    try:
+        prefs = await backend_call(
+            settings,
+            "PUT",
+            "prefs",
+            message.chat_id,
+            json={"latitude": latitude, "longitude": longitude, "timezone": timezone, "location_label": label},
+        )
+    except ValueError as exc:
+        await message.reply_text(str(exc), reply_markup=ReplyKeyboardRemove())
+        return
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to save location")
+        await message.reply_text(ERROR_REPLY, reply_markup=ReplyKeyboardRemove())
+        return
+    await message.reply_text(
+        f"Lokasi diatur ke: {label} ({tz_abbreviation(timezone)}).\n"
+        "Saya hanya menyimpan koordinat perkiraan, bukan alamat. Hapus kapan saja dengan /lokasi hapus.",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    location = saved_location(prefs)
+    if location is not None:
+        text = await schedule_reply(context.bot_data["prayer"], location)
+        await send_reply(message, markdown_to_html(text))
+
+
+async def location_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.message
+    if message is None:
+        return
+    settings: Settings = context.bot_data["settings"]
+    query = " ".join(context.args or []).strip()
+    if not query:
+        await message.reply_text(LOCATION_HELP, reply_markup=location_keyboard())
+        return
+    if query.lower() in CLEAR_WORDS:
+        try:
+            await backend_call(settings, "PUT", "prefs", message.chat_id, json={"latitude": None, "longitude": None})
+        except Exception:  # noqa: BLE001
+            logger.exception("Failed to clear location")
+            await message.reply_text(ERROR_REPLY)
+            return
+        await message.reply_text(
+            "Lokasi Anda sudah dihapus. Pengingat sholat, bila aktif, ikut dimatikan.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return
+    match = find_city(query)
+    city = match.found
+    if city is None:
+        if match.ambiguous:
+            first = match.cities[0]
+            options = "\n".join(f"• {candidate.label}" for candidate in match.cities)
+            await message.reply_text(
+                f"Ada beberapa tempat yang cocok:\n{options}\n\n"
+                f"Ulangi dengan provinsinya, misalnya: /lokasi {first.name}, {first.province}"
+            )
+        else:
+            await message.reply_text(
+                "Saya tidak menemukan tempat itu. Coba nama kota atau kabupaten lain, "
+                "atau ketuk tombol di bawah untuk mengirim lokasi Anda.",
+                reply_markup=location_keyboard(),
+            )
+        return
+    await save_location_and_show(
+        message,
+        context,
+        latitude=city.latitude,
+        longitude=city.longitude,
+        timezone=city.timezone,
+        label=city.label,
+    )
+
+
+async def location_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """A location pin sent with the button (or any location the user shares)."""
+    message = update.message
+    if message is None or message.location is None:
+        return
+    latitude, longitude = message.location.latitude, message.location.longitude
+    timezone = await context.bot_data["prayer"].resolve_timezone(latitude, longitude)
+    if timezone is None:
+        await message.reply_text(
+            "Saya belum bisa menentukan zona waktu lokasi itu. Coba lagi sebentar, "
+            "atau ketik nama kota dengan /lokasi.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return
+    city = nearest_city(latitude, longitude, max_km=PIN_LABEL_MAX_KM)
+    label = f"sekitar {city.label}" if city is not None else f"{latitude:.2f}, {longitude:.2f}"
+    await save_location_and_show(
+        message, context, latitude=latitude, longitude=longitude, timezone=timezone, label=label
+    )
+
+
+async def schedule_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.message
+    if message is None:
+        return
+    settings: Settings = context.bot_data["settings"]
+    tomorrow = any(arg.lower() in {"besok", "tomorrow"} for arg in (context.args or []))
+    try:
+        prefs = await backend_call(settings, "GET", "prefs", message.chat_id)
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to load prefs for /jadwal")
+        await message.reply_text(ERROR_REPLY)
+        return
+    location = saved_location(prefs)
+    if location is None:
+        await message.reply_text(NO_LOCATION_REPLY, reply_markup=location_keyboard())
+        return
+    text = await schedule_reply(context.bot_data["prayer"], location, tomorrow=tomorrow)
+    await send_reply(message, markdown_to_html(text))
+
+
+REMINDER_HELP = """Pengingat sholat dikirim tepat waktu (tanpa selisih menit) sesuai /jadwal.
+
+/pengingat on — nyalakan untuk Imsak, Subuh, Terbit, Dzuhur, Ashar, Maghrib, dan Isya
+/pengingat off — matikan semuanya
+/pengingat imsak off — matikan satu waktu saja (juga: subuh, terbit, dzuhur, ashar, maghrib, isya); ganti off dengan on untuk menyalakannya lagi
+
+Perlu lokasi: atur dengan /lokasi."""
+
+REMINDERS_UNAVAILABLE_REPLY = "Pengingat belum tersedia di server ini. Silakan hubungi pengelola bot."
+REMINDER_NEEDS_LOCATION_REPLY = (
+    "Pengingat butuh lokasi untuk menghitung waktu sholat. Ketuk tombol di bawah atau ketik "
+    "/lokasi <nama kota>, lalu ketik /pengingat on lagi."
+)
+
+REMINDER_INTERVAL_SECONDS = 60
+# Telegram allows about 30 messages a second to different chats; stay well under it.
+REMINDER_SEND_DELAY_SECONDS = 0.04
+REMINDER_TASK_KEY = "reminder_task"
+
+
+def format_reminder_summary(prefs: dict) -> str:
+    if not prefs.get("reminders_enabled"):
+        return "mati"
+    prayers = prefs.get("reminder_prayers") or list(PRAYER_KEYS)
+    return f"aktif ({len(prayers)} waktu)"
+
+
+def format_reminder_status(prefs: dict) -> str:
+    prayers = prefs.get("reminder_prayers") or list(PRAYER_KEYS)
+    lines = [
+        f"Pengingat sholat: {'aktif ✅' if prefs.get('reminders_enabled') else 'mati'}",
+        f"Waktu: {prayer_list(prayers)}",
+    ]
+    if prefs.get("location_label"):
+        lines.append(f"Lokasi: {prefs['location_label']}")
+    return "\n".join(lines)
+
+
+async def reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.message
+    if message is None:
+        return
+    settings: Settings = context.bot_data["settings"]
+    args = [arg.lower() for arg in (context.args or [])]
+    try:
+        prefs = await backend_call(settings, "GET", "prefs", message.chat_id)
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to load prefs for /pengingat")
+        await message.reply_text(ERROR_REPLY)
+        return
+    if not args:
+        await message.reply_text(f"{format_reminder_status(prefs)}\n\n{REMINDER_HELP}")
+        return
+
+    prayer: str | None = None
+    switch_on = False
+    chosen = prefs.get("reminder_prayers") or list(PRAYER_KEYS)
+    if args[0] in ON_WORDS or args[0] in OFF_WORDS:
+        switch_on = args[0] in ON_WORDS
+        change: dict = {"enabled": switch_on}
+    else:
+        prayer = parse_prayer_name(args[0])
+        word = args[1] if len(args) > 1 else ""
+        if prayer is None or (word not in ON_WORDS and word not in OFF_WORDS):
+            await message.reply_text(f"Cara pakai:\n\n{REMINDER_HELP}")
+            return
+        switch_on = word in ON_WORDS
+        remaining = {key for key in chosen if key != prayer} | ({prayer} if switch_on else set())
+        if not remaining:
+            await message.reply_text(
+                "Minimal satu waktu harus aktif. Pakai /pengingat off untuk mematikan semua pengingat."
+            )
+            return
+        change = {"prayers": [key for key in PRAYER_KEYS if key in remaining]}
+
+    if change.get("enabled"):
+        if not settings.admin_token:
+            logger.warning("/pengingat on refused: ADMIN_TOKEN is not set for the bot, so reminders cannot be delivered")
+            await message.reply_text(REMINDERS_UNAVAILABLE_REPLY)
+            return
+        if saved_location(prefs) is None:
+            await message.reply_text(REMINDER_NEEDS_LOCATION_REPLY, reply_markup=location_keyboard())
+            return
+    try:
+        result = await backend_call(settings, "PUT", "reminders", message.chat_id, json=change)
+    except ValueError as exc:
+        await message.reply_text(str(exc))
+        return
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to save reminders")
+        await message.reply_text(ERROR_REPLY)
+        return
+
+    active = prayer_list(result.get("prayers") or [])
+    if prayer is None and switch_on:
+        reply = f"Pengingat sholat dinyalakan ✅\nDikirim tepat waktu untuk: {active}.\nMatikan kapan saja dengan /pengingat off."
+    elif prayer is None:
+        reply = "Pengingat sholat dimatikan."
+    else:
+        reply = f"Pengingat {PRAYER_NAMES[prayer]} {'dinyalakan' if switch_on else 'dimatikan'}. Waktu aktif: {active}."
+        if not result.get("enabled"):
+            reply += "\nPengingat masih mati; nyalakan dengan /pengingat on."
+    await message.reply_text(reply)
+
+
+# --- delivering the reminders --------------------------------------------------------------------
+
+
+def chat_id_of(session_id: str) -> int | None:
+    prefix, _, value = session_id.partition(":")
+    if prefix != "tg":
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _admin_headers(settings: Settings) -> dict[str, str]:
+    return {"x-admin-token": settings.admin_token or ""}
+
+
+async def fetch_subscriptions(settings: Settings) -> list[dict]:
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{settings.telegram_api_base.rstrip('/')}/api/reminders",
+            headers=_admin_headers(settings),
+            timeout=20.0,
+        )
+    response.raise_for_status()
+    return response.json()
+
+
+async def admin_post(settings: Settings, path: str, json: dict | None = None) -> None:
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            f"{settings.telegram_api_base.rstrip('/')}{path}",
+            headers=_admin_headers(settings),
+            json=json,
+            timeout=20.0,
+        )
+    response.raise_for_status()
+
+
+def _parse_moment(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _chat_is_gone(exc: TelegramError) -> bool:
+    return isinstance(exc, Forbidden) or (isinstance(exc, BadRequest) and "chat not found" in str(exc).lower())
+
+
+async def send_due_reminders(
+    bot,
+    settings: Settings,
+    prayer,
+    now: datetime,
+    sent_cache: dict[str, datetime],
+    *,
+    delay: float = REMINDER_SEND_DELAY_SECONDS,
+) -> int:
+    """Send every reminder that is due at `now` (timezone-aware). Returns how many were sent.
+
+    A reminder is recorded as sent right after Telegram accepts it: in `sent_cache` at once (so a failed
+    bookkeeping call cannot cause a repeat) and on the server so a restart does not repeat it either.
+    """
+    subscriptions = await fetch_subscriptions(settings)
+    for session_id in [sid for sid, moment in sent_cache.items() if now - moment > timedelta(days=1)]:
+        del sent_cache[session_id]
+    sent = 0
+    for sub in subscriptions:
+        session_id = sub["session_id"]
+        chat_id = chat_id_of(session_id)
+        if chat_id is None:
+            continue
+        local_now = now.astimezone(ZoneInfo(sub["timezone"]))
+        timings = await prayer.timings(sub["latitude"], sub["longitude"], sub["timezone"], local_now.date())
+        if timings is None:
+            continue
+        last_sent = max(
+            (moment for moment in (_parse_moment(sub.get("last_sent")), sent_cache.get(session_id)) if moment),
+            default=None,
+        )
+        for key, moment in due_reminders(timings, sub["prayers"], last_sent, local_now):
+            try:
+                await bot.send_message(chat_id=chat_id, text=reminder_text(key, timings, sub["location_label"]))
+            except TelegramError as exc:
+                if _chat_is_gone(exc):
+                    logger.info("Chat %s is gone (%s); turning its reminders off", chat_id, exc)
+                    await _quietly(admin_post(settings, f"/api/reminders/{session_id}/disable"))
+                else:
+                    logger.warning("Could not send a reminder to %s: %s", chat_id, exc)  # retried next minute
+                break
+            sent_cache[session_id] = moment
+            await _quietly(
+                admin_post(settings, f"/api/reminders/{session_id}/sent", {"sent_at": moment.astimezone(timezone.utc).isoformat()})
+            )
+            sent += 1
+            await asyncio.sleep(delay)
+    return sent
+
+
+async def _quietly(awaitable) -> None:
+    try:
+        await awaitable
+    except Exception:  # noqa: BLE001 - bookkeeping must never stop the reminders.
+        logger.warning("Reminder bookkeeping call failed", exc_info=True)
+
+
+async def reminder_loop(application: Application) -> None:
+    settings: Settings = application.bot_data["settings"]
+    prayer = application.bot_data["prayer"]
+    sent_cache: dict[str, datetime] = {}
+    while True:
+        try:
+            await send_due_reminders(application.bot, settings, prayer, datetime.now(timezone.utc), sent_cache)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - one bad minute must not end the loop.
+            logger.exception("Reminder check failed; trying again next minute")
+        # Wake just after the next minute starts, so "Subuh 04:12" goes out at 04:12.
+        await asyncio.sleep(REMINDER_INTERVAL_SECONDS - time.time() % REMINDER_INTERVAL_SECONDS + 1)
+
+
+async def start_reminders(application: Application) -> None:
+    settings: Settings = application.bot_data["settings"]
+    if not settings.admin_token:
+        logger.warning("ADMIN_TOKEN is not set for the bot: prayer reminders are disabled")
+        return
+    application.bot_data[REMINDER_TASK_KEY] = asyncio.create_task(reminder_loop(application))
+
+
+async def stop_reminders(application: Application) -> None:
+    task = application.bot_data.pop(REMINDER_TASK_KEY, None)
+    if task is None:
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
 
 
 async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -587,11 +1014,15 @@ def build_application(settings: Settings) -> Application:
     builder = Application.builder().token(settings.telegram_bot_token).request(request)
     if settings.telegram_proxy:
         builder = builder.proxy(settings.telegram_proxy).get_updates_proxy(settings.telegram_proxy)
-    application = builder.build()
+    application = builder.post_init(start_reminders).post_shutdown(stop_reminders).build()
     application.bot_data["settings"] = settings
     application.bot_data["hijri"] = calendar_from_settings(settings)
+    application.bot_data["prayer"] = client_from_settings(settings)
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("hijriyah", hijri_command))
+    application.add_handler(CommandHandler("lokasi", location_command))
+    application.add_handler(CommandHandler("jadwal", schedule_command))
+    application.add_handler(CommandHandler("pengingat", reminder_command))
     application.add_handler(CommandHandler("reset", reset_command))
     application.add_handler(CommandHandler("lupa", forget_command))
     application.add_handler(CommandHandler("settings", settings_command))
@@ -602,6 +1033,8 @@ def build_application(settings: Settings) -> Application:
     application.add_handler(CommandHandler("ya", confirm_pref_command))
     application.add_handler(CommandHandler("tidak", cancel_pref_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+    # Before the catch-all below, which would answer a location pin with "text only".
+    application.add_handler(MessageHandler(filters.LOCATION, location_message_handler))
     application.add_handler(
         MessageHandler(~filters.TEXT & ~filters.COMMAND, non_text_handler)
     )

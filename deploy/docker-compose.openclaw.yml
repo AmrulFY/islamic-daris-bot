@@ -49,6 +49,10 @@ services:
       HIJRI_API_ENABLED: ${HIJRI_API_ENABLED:-true}
       HIJRI_API_BASE: ${HIJRI_API_BASE:-https://api.mabims.dev/api/v1}
       HIJRI_API_TIMEOUT_SECONDS: ${HIJRI_API_TIMEOUT_SECONDS:-3}
+      PRAYER_API_ENABLED: ${PRAYER_API_ENABLED:-true}
+      PRAYER_API_BASE: ${PRAYER_API_BASE:-https://api.aladhan.com/v1}
+      PRAYER_METHOD: ${PRAYER_METHOD:-20}
+      PRAYER_API_TIMEOUT_SECONDS: ${PRAYER_API_TIMEOUT_SECONDS:-4}
     ports:
       - "127.0.0.1:8021:8021"
     volumes:
@@ -71,6 +75,16 @@ services:
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_API_BASE: http://muslim-bot:8021
+      # Prayer reminders: the bot reads who has them on from the API, which only an admin may do.
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      # The bot answers /hijriyah, /jadwal and /lokasi itself, so it needs the calendar and prayer settings too.
+      HIJRI_API_ENABLED: ${HIJRI_API_ENABLED:-true}
+      HIJRI_API_BASE: ${HIJRI_API_BASE:-https://api.mabims.dev/api/v1}
+      HIJRI_API_TIMEOUT_SECONDS: ${HIJRI_API_TIMEOUT_SECONDS:-3}
+      PRAYER_API_ENABLED: ${PRAYER_API_ENABLED:-true}
+      PRAYER_API_BASE: ${PRAYER_API_BASE:-https://api.aladhan.com/v1}
+      PRAYER_METHOD: ${PRAYER_METHOD:-20}
+      PRAYER_API_TIMEOUT_SECONDS: ${PRAYER_API_TIMEOUT_SECONDS:-4}
 
 volumes:
   muslim_bot_data:

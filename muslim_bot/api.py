@@ -4,8 +4,10 @@ import asyncio
 import json
 import logging
 import os
+import re
 import threading
 from contextlib import asynccontextmanager
+from datetime import timezone
 from functools import lru_cache
 from typing import Annotated
 
@@ -27,6 +29,16 @@ from .hijri import (
     is_calendar_related,
     today_in,
 )
+from .prayer_times import (
+    NO_LOCATION_MESSAGE,
+    PrayerTimesClient,
+    build_prayer_context,
+    client_from_settings,
+    detect_schedule_request,
+    is_prayer_related,
+    location_from_prefs,
+    schedule_reply,
+)
 from .rate_limit import RateLimiter
 from .runtime_config import RuntimeConfig, RuntimeConfigStore
 from .schemas import (
@@ -38,6 +50,10 @@ from .schemas import (
     MCPTestResponse,
     PrefsResponse,
     PrefsUpdate,
+    ReminderSent,
+    RemindersResponse,
+    RemindersUpdate,
+    SubscriptionResponse,
 )
 from .semantic_index import build as build_index, index_complete
 from .session_store import SessionStore, UserPrefs
@@ -157,6 +173,36 @@ async def try_calendar_reply(message: str) -> AgentReply | None:
 
 
 @lru_cache(maxsize=1)
+def get_prayer_client() -> PrayerTimesClient:
+    return client_from_settings(get_settings())
+
+
+async def try_prayer_reply(message: str, prefs: UserPrefs) -> AgentReply | None:
+    """Answer a plain "jadwal sholat (hari ini / besok)" from the user's saved location, no LLM involved."""
+    when = detect_schedule_request(message)
+    if when is None:
+        return None
+    location = location_from_prefs(prefs)
+    if location is None:
+        return AgentReply(answer=NO_LOCATION_MESSAGE, used_tools=["prayer_times"])
+    answer = await schedule_reply(get_prayer_client(), location, tomorrow=when == "tomorrow")
+    return AgentReply(answer=answer, used_tools=["prayer_times"])
+
+
+async def _with_prayer(
+    prefs: UserPrefs, message: str, recent_turns: list[tuple[str, str]], history_prompt: str
+) -> str:
+    """Prepend the user's prayer times when the question is about them (or follows up such a question)."""
+    location = location_from_prefs(prefs)
+    if location is None:
+        return history_prompt
+    block = await build_prayer_context(
+        get_prayer_client(), location, message, [user for user, _ in recent_turns[-3:]]
+    )
+    return f"{block}\n\n{history_prompt}" if block else history_prompt
+
+
+@lru_cache(maxsize=1)
 def get_config_store() -> RuntimeConfigStore:
     return RuntimeConfigStore(settings=get_settings())
 
@@ -262,14 +308,22 @@ async def chat(
     language = prefs.language or request.language
     history_prompt = store.history_prompt(session_id, request.message)
     has_history = history_prompt != request.message
-    # Calendar answers mention "today" and days remaining, so they go stale within a day.
-    use_cache = not has_history and not prefs.customizes_answer and not is_calendar_related(request.message)
+    # Calendar and prayer answers mention "today" and times that pass, so they go stale quickly.
+    use_cache = (
+        not has_history
+        and not prefs.customizes_answer
+        and not is_calendar_related(request.message)
+        and not is_prayer_related(request.message)
+    )
     history_prompt = _with_prefs(prefs, history_prompt)
     recent_turns = store.recent_turns(session_id, limit=_recent_limit(prefs))
+    history_prompt = await _with_prayer(prefs, request.message, recent_turns, history_prompt)
 
     fast = runner.try_fast_path(request.message, language=language)
     if fast is None:
         fast = await try_calendar_reply(request.message)
+    if fast is None:
+        fast = await try_prayer_reply(request.message, prefs)
     if fast is not None:
         store.append(session_id, request.message, fast.answer)
         return _reply_to_response(session_id, fast)
@@ -325,12 +379,19 @@ def _recent_limit(prefs: UserPrefs) -> int:
 
 
 def _prefs_response(session_id: str, prefs: UserPrefs, store: SessionStore) -> PrefsResponse:
+    reminders = store.get_reminders(session_id)
     return PrefsResponse(
         session_id=session_id,
         language=prefs.language,
         style=prefs.style,
         note=prefs.note,
         history_turns=prefs.history_turns,
+        latitude=prefs.latitude,
+        longitude=prefs.longitude,
+        timezone=prefs.timezone,
+        location_label=prefs.location_label,
+        reminders_enabled=reminders.enabled,
+        reminder_prayers=list(reminders.prayers),
         max_history_turns=store.max_turns,
     )
 
@@ -367,6 +428,70 @@ def delete_prefs(
 ) -> PrefsResponse:
     store.clear_prefs(session_id)
     return _prefs_response(session_id, UserPrefs(), store)
+
+
+# Reminders are delivered by the Telegram bot, so only Telegram sessions ("tg:<chat id>") can have them.
+TELEGRAM_SESSION_RE = re.compile(r"^tg:-?\d+$")
+
+
+def _reminders_response(session_id: str, store: SessionStore) -> RemindersResponse:
+    reminders = store.get_reminders(session_id)
+    return RemindersResponse(session_id=session_id, enabled=reminders.enabled, prayers=list(reminders.prayers))
+
+
+@app.get("/sessions/{session_id}/reminders", response_model=RemindersResponse)
+def get_reminders(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+    _: None = Depends(check_rate_limit),
+) -> RemindersResponse:
+    return _reminders_response(session_id, store)
+
+
+@app.put("/sessions/{session_id}/reminders", response_model=RemindersResponse)
+def put_reminders(
+    session_id: str,
+    update: RemindersUpdate,
+    store: SessionStore = Depends(get_session_store),
+    _: None = Depends(check_rate_limit),
+) -> RemindersResponse:
+    if not TELEGRAM_SESSION_RE.match(session_id):
+        raise HTTPException(status_code=422, detail="Reminders are only available in Telegram")
+    try:
+        store.set_reminders(session_id, **{name: getattr(update, name) for name in update.model_fields_set})
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return _reminders_response(session_id, store)
+
+
+@app.get("/api/reminders", response_model=list[SubscriptionResponse], dependencies=[Depends(require_admin)])
+def list_reminder_subscriptions(store: SessionStore = Depends(get_session_store)) -> list[SubscriptionResponse]:
+    """Every enabled reminder with its location. Admin only: this is a list of where people are."""
+    return [
+        SubscriptionResponse(
+            session_id=sub.session_id,
+            latitude=sub.latitude,
+            longitude=sub.longitude,
+            timezone=sub.timezone,
+            location_label=sub.location_label,
+            prayers=list(sub.prayers),
+            last_sent=sub.last_sent,
+        )
+        for sub in store.reminder_subscriptions()
+    ]
+
+
+@app.post("/api/reminders/{session_id}/sent", status_code=204, dependencies=[Depends(require_admin)])
+def mark_reminder_sent(
+    session_id: str, sent: ReminderSent, store: SessionStore = Depends(get_session_store)
+) -> None:
+    when = sent.sent_at if sent.sent_at.tzinfo else sent.sent_at.replace(tzinfo=timezone.utc)
+    store.mark_reminder_sent(session_id, when)
+
+
+@app.post("/api/reminders/{session_id}/disable", status_code=204, dependencies=[Depends(require_admin)])
+def disable_reminders(session_id: str, store: SessionStore = Depends(get_session_store)) -> None:
+    store.disable_reminders(session_id)
 
 
 @app.delete("/sessions/{session_id}/history", response_model=HistoryClearResponse)
@@ -431,10 +556,16 @@ async def chat_stream(
     language = prefs.language or request.language
     history_prompt = store.history_prompt(session_id, request.message)
     has_history = history_prompt != request.message
-    # Calendar answers mention "today" and days remaining, so they go stale within a day.
-    use_cache = not has_history and not prefs.customizes_answer and not is_calendar_related(request.message)
+    # Calendar and prayer answers mention "today" and times that pass, so they go stale quickly.
+    use_cache = (
+        not has_history
+        and not prefs.customizes_answer
+        and not is_calendar_related(request.message)
+        and not is_prayer_related(request.message)
+    )
     history_prompt = _with_prefs(prefs, history_prompt)
     recent_turns = store.recent_turns(session_id, limit=_recent_limit(prefs))
+    history_prompt = await _with_prayer(prefs, request.message, recent_turns, history_prompt)
     idle_timeout = runtime_config.agent_timeout_seconds
 
     async def instant(reply: AgentReply):
@@ -446,6 +577,8 @@ async def chat_stream(
         fast = runner.try_fast_path(request.message, language=language)
         if fast is None:
             fast = await try_calendar_reply(request.message)
+        if fast is None:
+            fast = await try_prayer_reply(request.message, prefs)
         if fast is not None:
             async for event in instant(fast):
                 yield event

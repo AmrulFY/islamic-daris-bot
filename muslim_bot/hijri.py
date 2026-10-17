@@ -216,7 +216,11 @@ EVENT_DEFS: dict[str, tuple[str, tuple[int, int]]] = {
     "idul_adha": ("Idul Adha", (12, 10)),
     "1_muharram": ("Tahun Baru Islam", (1, 1)),
     "maulid_nabi": ("Maulid Nabi Muhammad SAW", (3, 12)),
+    "isra_miraj": ("Isra Miraj", (7, 27)),
+    "nisfu_syaban": ("Nisfu Syaban", (8, 15)),
 }
+# The API's /events lacks these, so their dates are looked up one by one with /convert.
+EXTRA_EVENT_KEYS = ("isra_miraj", "nisfu_syaban")
 
 # Events whose date the government confirms at sidang isbat.
 ISBAT_EVENTS = frozenset({"awal_ramadan", "idul_fitri", "idul_adha", "puasa_ramadan"})
@@ -367,6 +371,8 @@ _EVENT_WORDS = (
     "tasu'a",
     "miraj",
     "mi'raj",
+    "mikraj",
+    "israk",
     "nisfu",
     "syaban",
     "sya'ban",
@@ -394,7 +400,7 @@ FOLLOW_UP_MAX_CHARS = 80
 _NEW_DALIL_TOPIC_WORDS = ("ayat", "hadits", "hadis", "hadith", "dalil", "surah", "surat", "doa")
 
 
-def _names_new_dalil_topic(message: str) -> bool:
+def names_new_dalil_topic(message: str) -> bool:
     words = set(message.lower().replace("?", " ").replace("!", " ").split())
     return any(word in words for word in _NEW_DALIL_TOPIC_WORDS)
 
@@ -414,7 +420,7 @@ def wants_calendar(message: str, previous_user: str | Sequence[str] | None = Non
     """
     if is_calendar_related(message):
         return True
-    if not previous_user or len(message) > FOLLOW_UP_MAX_CHARS or _names_new_dalil_topic(message):
+    if not previous_user or len(message) > FOLLOW_UP_MAX_CHARS or names_new_dalil_topic(message):
         return False
     earlier = [previous_user] if isinstance(previous_user, str) else list(previous_user)
     return any(is_calendar_related(text) for text in earlier)
@@ -467,9 +473,10 @@ class HijriCalendar:
         if self.enabled and time.monotonic() >= self._down_until:
             try:
                 payload = await self._get_json(f"{self.api_base}/events", {"year": year, "calendar": "gregorian"})
-                result = with_derived_events(parse_events_response(payload))
-                if not result:
+                base = parse_events_response(payload)
+                if not base:
                     raise ValueError("MABIMS returned no events")
+                result = with_derived_events([*base, *await self._extra_events(year)])
             except (httpx.HTTPError, ValueError) as exc:
                 self._down_until = time.monotonic() + FAILURE_COOLDOWN_SECONDS
                 logger.warning("MABIMS events unavailable (%r), using local calculation", exc)
@@ -477,6 +484,40 @@ class HijriCalendar:
                 self._events_cache[year] = (time.monotonic() + CACHE_TTL_SECONDS, result)
                 return result
         return with_derived_events(calculate_events(year))
+
+    async def _extra_events(self, year: int) -> list[HijriEvent]:
+        """EXTRA_EVENT_KEYS that fall in Gregorian `year`: exact dates from /convert, local estimates if it fails."""
+        try:
+            first_hijri_year = Gregorian(year, 1, 1).to_hijri().year
+        except (OverflowError, ValueError):
+            return []
+        lower, upper = date(year, 1, 1) - timedelta(days=3), date(year, 12, 31) + timedelta(days=3)
+        wanted: list[tuple[str, int, date]] = []
+        for key in EXTRA_EVENT_KEYS:
+            _, (month, day) = EVENT_DEFS[key]
+            for hijri_year in range(first_hijri_year - 1, first_hijri_year + 3):
+                try:
+                    estimate = Hijri(hijri_year, month, day).to_gregorian()
+                except (OverflowError, ValueError):
+                    continue
+                estimate_day = date(estimate.year, estimate.month, estimate.day)
+                if lower <= estimate_day <= upper:  # close enough that the exact date may fall in `year`
+                    wanted.append((key, hijri_year, estimate_day))
+        found = await asyncio.gather(*(self._extra_event(*item) for item in wanted))
+        return [event for event in found if event.day.year == year]
+
+    async def _extra_event(self, key: str, hijri_year: int, estimate: date) -> HijriEvent:
+        name, (month, day) = EVENT_DEFS[key]
+        label = f"{hijri_year:04d}-{month:02d}-{day:02d}"
+        if self._api_usable():
+            try:
+                payload = await self._get_json(f"{self.api_base}/convert", {"date": label, "calendar": "hijri"})
+                out = payload["output"]
+                exact = date(int(out["year"]), int(out["month"]), int(out["day"]))
+                return HijriEvent(key, name, exact, str(payload["source"]), label)
+            except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+                logger.warning("MABIMS /convert failed for %s (%r), using the local estimate", label, exc)
+        return HijriEvent(key, name, estimate, SOURCE_FALLBACK, label)
 
     async def convert(self, day: date | None = None) -> HijriDate | None:
         """Hijri date for `day` (default: today in Jakarta). None only if every source fails."""

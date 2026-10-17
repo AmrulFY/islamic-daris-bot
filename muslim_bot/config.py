@@ -115,6 +115,10 @@ class Settings:
     hijri_api_enabled: bool = True
     hijri_api_base: str = "https://api.mabims.dev/api/v1"
     hijri_api_timeout_seconds: float = 3.0
+    prayer_api_enabled: bool = True
+    prayer_api_base: str = "https://api.aladhan.com/v1"
+    prayer_method: int = 20
+    prayer_api_timeout_seconds: float = 4.0
 
     @property
     def has_openai_api_key(self) -> bool:
@@ -176,4 +180,8 @@ def load_settings(env_file: Path | None = PROJECT_ROOT / ".env") -> Settings:
         hijri_api_enabled=_bool_from_env("HIJRI_API_ENABLED", True),
         hijri_api_base=os.getenv("HIJRI_API_BASE") or "https://api.mabims.dev/api/v1",
         hijri_api_timeout_seconds=_float_from_env("HIJRI_API_TIMEOUT_SECONDS", 3.0),
+        prayer_api_enabled=_bool_from_env("PRAYER_API_ENABLED", True),
+        prayer_api_base=os.getenv("PRAYER_API_BASE") or "https://api.aladhan.com/v1",
+        prayer_method=_int_from_env("PRAYER_METHOD", 20),
+        prayer_api_timeout_seconds=_float_from_env("PRAYER_API_TIMEOUT_SECONDS", 4.0),
     )

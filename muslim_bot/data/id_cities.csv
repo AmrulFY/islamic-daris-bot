@@ -1,0 +1,484 @@
+name,province,latitude,longitude,timezone,population
+Jakarta,DKI Jakarta,-6.2146,106.8451,Asia/Jakarta,8540121
+Surabaya,Jawa Timur,-7.2492,112.7508,Asia/Jakarta,3018022
+Bekasi,Jawa Barat,-6.2349,106.9896,Asia/Jakarta,2648272
+Bandung,Jawa Barat,-6.9222,107.6069,Asia/Jakarta,2528163
+Medan,Sumatera Utara,3.5833,98.6667,Asia/Jakarta,2486283
+Depok,Jawa Barat,-6.4,106.8186,Asia/Jakarta,2163635
+Tangerang,Banten,-6.1781,106.63,Asia/Jakarta,1927815
+Palembang,Sumatera Selatan,-2.9167,104.7458,Asia/Jakarta,1801367
+Semarang,Jawa Tengah,-6.9931,110.4208,Asia/Jakarta,1694740
+Makassar,Sulawesi Selatan,-5.1486,119.4319,Asia/Makassar,1474393
+South Tangerang,Banten,-6.2886,106.7179,Asia/Jakarta,1429529
+Batam,Riau,1.1494,104.0249,Asia/Jakarta,1296960
+Jepara,Jawa Tengah,-6.5924,110.671,Asia/Jakarta,1257912
+Pekanbaru,Riau,0.5167,101.4417,Asia/Jakarta,1167599
+Bandar Lampung,Lampung,-5.4292,105.2611,Asia/Jakarta,1166066
+Bogor,Jawa Barat,-6.5944,106.7892,Asia/Jakarta,1078351
+Padang,Sumatera Barat,-0.9492,100.3543,Asia/Jakarta,942938
+Malang,Jawa Timur,-7.9797,112.6304,Asia/Jakarta,889359
+Samarinda,Kalimantan Timur,-0.4917,117.1458,Asia/Makassar,865306
+Tasikmalaya,Jawa Barat,-7.3274,108.2207,Asia/Jakarta,770839
+Serang,Banten,-6.1153,106.1542,Asia/Jakarta,735651
+Balikpapan,Kalimantan Timur,-1.2675,116.8289,Asia/Makassar,695287
+Pontianak,Kalimantan Barat,-0.0319,109.325,Asia/Pontianak,686019
+Situbondo,Jawa Timur,-7.7062,114.0098,Asia/Jakarta,685967
+Denpasar,Bali,-8.65,115.2167,Asia/Makassar,670210
+Banjarmasin,Kalimantan Selatan,-3.3199,114.5907,Asia/Makassar,657663
+Jambi City,Jambi,-1.6,103.6167,Asia/Jakarta,635101
+Cimahi,Jawa Barat,-6.8722,107.5425,Asia/Jakarta,581994
+Surakarta,Jawa Tengah,-7.5561,110.8317,Asia/Jakarta,526870
+Kupang,Nusa Tenggara Timur,-10.1708,123.6069,Asia/Makassar,474801
+Cilegon,Banten,-6.0144,106.0542,Asia/Jakarta,470378
+Manado,Sulawesi Utara,1.4822,124.8489,Asia/Makassar,458582
+Mataram,Nusa Tenggara Barat,-8.5833,116.1167,Asia/Makassar,441147
+Jayapura,Papua,-2.5337,140.7181,Asia/Jayapura,410852
+Bengkulu,Bengkulu,-3.8004,102.2655,Asia/Jakarta,397321
+Palu,Sulawesi Tengah,-0.9083,119.8708,Asia/Makassar,389959
+Yogyakarta,DI Yogyakarta,-7.8014,110.3647,Asia/Jakarta,375699
+Sukabumi,Jawa Barat,-6.9181,106.9267,Asia/Jakarta,365735
+Cibinong,Jawa Barat,-6.4817,106.8542,Asia/Jakarta,363424
+Kendari,Sulawesi Tenggara,-3.9778,122.5151,Asia/Makassar,351085
+Dumai,Riau,1.6671,101.4432,Asia/Jakarta,349389
+Ambon,Maluku,-3.6958,128.1833,Asia/Jayapura,347288
+Cirebon,Jawa Barat,-6.7063,108.557,Asia/Jakarta,344851
+Pekalongan,Jawa Tengah,-6.8886,109.6753,Asia/Jakarta,324564
+Palangkaraya,Kalimantan Tengah,-2.2083,113.9167,Asia/Pontianak,318247
+Percut,Sumatera Utara,3.6253,98.864,Asia/Jakarta,311063
+Karawang,Jawa Barat,-6.3053,107.3197,Asia/Jakarta,307880
+Kediri,Jawa Timur,-7.8167,112.0167,Asia/Jakarta,301424
+Jember,Jawa Timur,-8.1721,113.6995,Asia/Jakarta,298585
+Tegal,Jawa Tengah,-6.8694,109.1402,Asia/Jakarta,297173
+Banjarbaru,Kalimantan Selatan,-3.4406,114.8365,Asia/Makassar,293332
+Cileungsir,Jawa Barat,-6.3947,106.9592,Asia/Jakarta,289833
+Binjai,Sumatera Utara,3.6001,98.4854,Asia/Jakarta,279302
+Pematangsiantar,Sumatera Utara,2.9595,99.0687,Asia/Jakarta,279198
+Banda Aceh,Aceh,5.5417,95.3333,Asia/Jakarta,267962
+Pasarkemis,Jawa Barat,-6.1703,106.5303,Asia/Jakarta,263289
+Cilacap,Jawa Tengah,-7.7264,109.0094,Asia/Jakarta,256996
+Tarakan,Kalimantan Utara,3.3133,117.5915,Asia/Makassar,255310
+Singkawang,Kalimantan Barat,0.9093,108.9846,Asia/Pontianak,253812
+Padangsidempuan,Sumatera Utara,1.3795,99.2715,Asia/Jakarta,243843
+Probolinggo,Jawa Timur,-7.7543,113.2159,Asia/Jakarta,243746
+Toli-Toli,Sulawesi Tengah,1.0402,120.8176,Asia/Makassar,242783
+Lubuklinggau,Sumatera Selatan,-3.2945,102.8614,Asia/Jakarta,234166
+Purwokerto,Jawa Tengah,-7.4214,109.2344,Asia/Jakarta,230235
+Tanjung Pinang,Kepulauan Riau,0.9167,104.4583,Asia/Jakarta,227663
+Pangkalpinang,Kepulauan Bangka Belitung,-2.1291,106.1138,Asia/Jakarta,226297
+Batu,Jawa Timur,-7.87,112.5283,Asia/Jakarta,225408
+Bitung,Sulawesi Utara,1.4406,125.1282,Asia/Makassar,225134
+Klungkung,Bali,-8.5333,115.4,Asia/Makassar,223720
+Sorong,Papua Barat Daya,-0.8796,131.261,Asia/Jayapura,219958
+Citeureup,Jawa Barat,-6.4856,106.8819,Asia/Jakarta,214668
+Pasuruan,Jawa Timur,-7.6453,112.9075,Asia/Jakarta,213469
+Loa Janan,Kalimantan Timur,-0.5829,117.095,Asia/Makassar,212816
+Ternate,Maluku Utara,0.7906,127.3842,Asia/Jayapura,210836
+Banjar,Jawa Barat,-7.1955,107.4313,Asia/Jakarta,209791
+Ciputat,Jawa Barat,-6.2375,106.6956,Asia/Jakarta,207858
+Ciampea,Jawa Barat,-6.5547,106.7008,Asia/Jakarta,207212
+Gorontalo,Gorontalo,0.5375,123.0625,Asia/Makassar,205390
+Madiun,Jawa Timur,-7.6298,111.5239,Asia/Jakarta,202544
+Rengasdengklok,Jawa Barat,-6.1592,107.2981,Asia/Jakarta,201463
+Lhokseumawe,Aceh,5.1801,97.1507,Asia/Jakarta,200876
+Sumedang,Jawa Barat,-6.8586,107.9164,Asia/Jakarta,200000
+Salatiga,Jawa Tengah,-7.3319,110.4928,Asia/Jakarta,198971
+Sawangan,Jawa Barat,-6.4028,106.7744,Asia/Jakarta,197170
+Bontang,Kalimantan Timur,0.1324,117.4854,Asia/Makassar,194606
+Padalarang,Jawa Barat,-6.8378,107.4728,Asia/Jakarta,193114
+Curug,Banten,-6.2658,106.5564,Asia/Jakarta,191406
+Tanjungbalai,Sumatera Utara,2.9667,99.8,Asia/Jakarta,190935
+Labuan Bajo,Nusa Tenggara Timur,-8.4964,119.8877,Asia/Makassar,188724
+Palopo,Sulawesi Selatan,-2.9925,120.1969,Asia/Makassar,184961
+Pemalang,Jawa Tengah,-6.8919,109.3826,Asia/Jakarta,184149
+Langsa,Aceh,4.4683,97.9683,Asia/Jakarta,184016
+Lembang,Jawa Barat,-6.8117,107.6175,Asia/Jakarta,183130
+Singosari,Jawa Timur,-7.8924,112.6658,Asia/Jakarta,182656
+Metro,Lampung,-5.1131,105.3067,Asia/Jakarta,182293
+Purwakarta,Jawa Barat,-6.5569,107.4433,Asia/Jakarta,179233
+Teluknaga,Jawa Barat,-6.0989,106.6381,Asia/Jakarta,175155
+Cianjur,Jawa Barat,-6.8222,107.1394,Asia/Jakarta,174587
+Pamulang,Jawa Barat,-6.3428,106.7383,Asia/Jakarta,174557
+Cikupa,Jawa Barat,-6.2364,106.5083,Asia/Jakarta,174041
+Ungaran,Jawa Tengah,-7.1397,110.405,Asia/Jakarta,171378
+Plumbon,Jawa Barat,-6.705,108.4728,Asia/Jakarta,167105
+Sampit,Kalimantan Tengah,-2.5315,112.9496,Asia/Pontianak,166773
+Bima,Nusa Tenggara Barat,-8.4601,118.7267,Asia/Makassar,165113
+Banjaran,Jawa Barat,-7.0453,107.5878,Asia/Jakarta,164952
+Baubau,Sulawesi Tenggara,-5.4633,122.6024,Asia/Makassar,161280
+Blitar,Jawa Timur,-8.0983,112.1681,Asia/Jakarta,161204
+Parepare,Sulawesi Selatan,-4.0135,119.6255,Asia/Makassar,160309
+Sunggal,Sumatera Utara,3.5765,98.6151,Asia/Jakarta,157914
+Perbaungan,Sumatera Utara,3.5679,98.956,Asia/Jakarta,157174
+Watampone,Sulawesi Selatan,-4.5386,120.3279,Asia/Makassar,149336
+Astanajapura,Jawa Barat,-6.8017,108.6311,Asia/Jakarta,148047
+Nusantara,Kalimantan Timur,-0.9731,116.7086,Asia/Makassar,147430
+Timika,Papua Tengah,-4.6141,136.6768,Asia/Jayapura,142909
+Kisaran,Sumatera Utara,2.9845,99.6158,Asia/Jakarta,141915
+Mojokerto,Jawa Timur,-7.4664,112.4338,Asia/Jakarta,141785
+Payakumbuh,Sumatera Barat,-0.2159,100.6334,Asia/Jakarta,139576
+Batang,Jawa Tengah,-6.4846,110.7083,Asia/Jakarta,139492
+Purwodadi,Jawa Tengah,-7.0868,110.9158,Asia/Jakarta,139387
+Sidoarjo,Jawa Timur,-7.4478,112.7183,Asia/Jakarta,139189
+Weru,Jawa Barat,-6.711,108.5037,Asia/Jakarta,139004
+Subang,Jawa Barat,-6.57,107.7567,Asia/Jakarta,137234
+Rangkasbitung,Banten,-6.3591,106.2494,Asia/Jakarta,137041
+Gunungsitoli,Sumatera Utara,1.2888,97.6143,Asia/Jakarta,136707
+Baturaja,Sumatera Selatan,-4.1289,104.1669,Asia/Jakarta,134759
+Adiwerna,Jawa Tengah,-6.9375,109.1325,Asia/Jakarta,134188
+Singaraja,Bali,-8.112,115.0882,Asia/Makassar,133784
+Manokwari,Papua Barat,-0.8629,134.064,Asia/Jayapura,132300
+Garut,Jawa Barat,-7.245,107.921,Asia/Jakarta,131809
+Martapura,Kalimantan Selatan,-3.4109,114.8642,Asia/Makassar,131449
+Parung,Jawa Barat,-6.4214,106.7331,Asia/Jakarta,128905
+Magelang,Jawa Tengah,-7.4706,110.2178,Asia/Jakarta,128709
+Cikampek,Jawa Barat,-6.4197,107.4558,Asia/Jakarta,127173
+Klaten,Jawa Tengah,-7.7058,110.6064,Asia/Jakarta,126831
+Jombang,Jawa Timur,-7.546,112.2331,Asia/Jakarta,126465
+Paseh,Jawa Barat,-7.068,107.794,Asia/Jakarta,126181
+Sukawati,Bali,-8.4913,115.0459,Asia/Makassar,125470
+Lumajang,Jawa Timur,-8.1335,113.2248,Asia/Jakarta,123626
+Indramayu,Jawa Barat,-6.3264,108.32,Asia/Jakarta,123263
+Kotamobagu,Sulawesi Utara,0.7419,124.3121,Asia/Makassar,121756
+Bukittinggi,Sumatera Barat,-0.3091,100.3705,Asia/Jakarta,121028
+Sepatan,Jawa Barat,-6.1189,106.575,Asia/Jakarta,118439
+Banyuwangi,Jawa Timur,-8.2325,114.3576,Asia/Jakarta,117558
+Tebingtinggi,Sumatera Utara,3.3285,99.1625,Asia/Jakarta,117530
+Kedungwuni,Jawa Tengah,-6.9704,109.6479,Asia/Jakarta,117249
+Merauke,Papua Selatan,-8.4996,140.4061,Asia/Jayapura,116864
+Soreang,Jawa Barat,-7.0331,107.5183,Asia/Jakarta,116780
+Pamanukan,Jawa Barat,-6.2842,107.8106,Asia/Jakarta,114290
+Lawang,Jawa Timur,-7.8353,112.6947,Asia/Jakarta,112540
+Kuningan,Jawa Barat,-6.9758,108.4831,Asia/Jakarta,111742
+Cileunyi,Jawa Barat,-6.9389,107.7528,Asia/Jakarta,111476
+Kresek,Jawa Barat,-6.1314,106.3797,Asia/Jakarta,110182
+Ciamis,Jawa Barat,-7.3257,108.3534,Asia/Jakarta,109839
+Pelabuhanratu,Jawa Barat,-6.9875,106.5514,Asia/Jakarta,109523
+Pangkalanbuun,Kalimantan Tengah,-2.6832,111.6259,Asia/Pontianak,108814
+Pati,Jawa Tengah,-6.7559,111.038,Asia/Jakarta,107028
+Cikarang,Jawa Barat,-6.2611,107.1528,Asia/Jakarta,106479
+Pare,Jawa Timur,-7.7679,112.198,Asia/Jakarta,106007
+Arjawinangun,Jawa Barat,-6.6453,108.4103,Asia/Jakarta,105845
+Subulussalam,Aceh,2.662,97.8827,Asia/Jakarta,105553
+Depok,DI Yogyakarta,-7.7625,110.4317,Asia/Jakarta,104527
+Prabumulih,Sumatera Selatan,-3.4345,104.2306,Asia/Jakarta,103470
+Tanjung Pandan,Kepulauan Bangka Belitung,-2.7335,107.6348,Asia/Jakarta,103062
+Rantauprapat,Sumatera Utara,2.1,99.8333,Asia/Jakarta,103009
+Belawan,Sumatera Utara,3.7755,98.6832,Asia/Jakarta,102707
+Sungai Penuh,Jambi,-2.0561,101.3913,Asia/Jakarta,102224
+Sungailiat,Kepulauan Bangka Belitung,-1.8544,106.1222,Asia/Jakarta,100750
+Grogol,Jawa Tengah,-7.6011,110.8186,Asia/Jakarta,100613
+Negara,Bali,-8.3569,114.6169,Asia/Makassar,100074
+Sumedang Utara,Jawa Barat,-6.85,107.9167,Asia/Jakarta,100000
+Nabire,Papua Tengah,-3.3599,135.5007,Asia/Jayapura,99848
+Dukuhturi,Jawa Tengah,-6.9,109.0833,Asia/Jakarta,98074
+Sumber,Jawa Barat,-6.7603,108.4831,Asia/Jakarta,96725
+Wonosobo,Jawa Tengah,-7.3589,109.9031,Asia/Jakarta,92990
+Palimanan,Jawa Barat,-6.7069,108.4242,Asia/Jakarta,92600
+Selong,Nusa Tenggara Barat,-8.6503,116.5318,Asia/Makassar,92464
+Pamekasan,Jawa Timur,-7.1568,113.4746,Asia/Jakarta,92447
+Pandeglang,Banten,-6.3084,106.1067,Asia/Jakarta,92316
+Sibolga,Sumatera Utara,1.7402,98.7812,Asia/Jakarta,92244
+Pariaman,Sumatera Barat,-0.619,100.12,Asia/Jakarta,92183
+Kudus,Jawa Tengah,-6.8048,110.8405,Asia/Jakarta,92156
+Caringin,Jawa Barat,-6.7061,106.8214,Asia/Jakarta,91845
+Tual,Maluku,-5.6288,132.7523,Asia/Jayapura,90470
+Banjar,Bali,-8.19,114.9675,Asia/Makassar,89040
+Cicurug,Jawa Barat,-6.7814,106.7825,Asia/Jakarta,88965
+Kartasura,Jawa Tengah,-7.5519,110.7378,Asia/Jakarta,88927
+Klangenan,Jawa Barat,-6.7094,108.44,Asia/Jakarta,88378
+Maumere,Nusa Tenggara Timur,-8.6199,122.2111,Asia/Makassar,87720
+Wonosari,DI Yogyakarta,-7.9656,110.6036,Asia/Jakarta,87454
+Ende,Nusa Tenggara Timur,-8.8432,121.6623,Asia/Makassar,87269
+Bojonegoro,Jawa Timur,-7.1502,111.8817,Asia/Jakarta,86568
+Bangkalan,Jawa Timur,-7.0455,112.7351,Asia/Jakarta,86250
+Kasihan,DI Yogyakarta,-7.8269,110.3292,Asia/Jakarta,86234
+Bangil,Jawa Timur,-7.5994,112.8186,Asia/Jakarta,85504
+Sintang,Kalimantan Barat,0.0667,111.5,Asia/Pontianak,85000
+Sumenep,Jawa Timur,-7.0115,113.8604,Asia/Jakarta,84656
+Margahayukencana,Jawa Barat,-6.9708,107.5675,Asia/Jakarta,83119
+Galesong,Sulawesi Selatan,-5.3166,119.3661,Asia/Makassar,83050
+Atambua,Nusa Tenggara Timur,-9.1061,124.8925,Asia/Makassar,82196
+Muntilan,Jawa Tengah,-7.5811,110.2928,Asia/Jakarta,81555
+Kedungwaru,Jawa Timur,-8.0667,111.9167,Asia/Jakarta,80257
+Serpong,Jawa Barat,-6.3169,106.6642,Asia/Jakarta,80193
+Genteng,Jawa Timur,-8.3667,114.15,Asia/Jakarta,79652
+Gedangan,Jawa Timur,-7.3908,112.7267,Asia/Jakarta,79230
+Ponorogo,Jawa Timur,-7.8685,111.462,Asia/Jakarta,79026
+Ciranjang-hilir,Jawa Barat,-6.82,107.2572,Asia/Jakarta,77758
+Tuban,Jawa Timur,-6.8976,112.0649,Asia/Jakarta,76242
+Kebomas,Jawa Timur,-7.1667,112.6333,Asia/Jakarta,75982
+Karangsembung,Jawa Barat,-6.8487,108.6422,Asia/Jakarta,75856
+Tarub,Jawa Tengah,-6.9333,109.1667,Asia/Jakarta,75739
+Ubud,Bali,-8.5098,115.2654,Asia/Makassar,74800
+Majene,Sulawesi Barat,-3.5403,118.9707,Asia/Makassar,73883
+Gresik,Jawa Timur,-7.1539,112.6561,Asia/Jakarta,73629
+Sewon,DI Yogyakarta,-7.8764,110.3589,Asia/Jakarta,73585
+Kabanjahe,Sumatera Utara,3.1001,98.4908,Asia/Jakarta,73581
+Solok,Sumatera Barat,-0.8006,100.6571,Asia/Jakarta,73438
+Majalengka,Jawa Barat,-6.8361,108.2278,Asia/Jakarta,73052
+Jatibarang,Jawa Barat,-6.4747,108.3153,Asia/Jakarta,73010
+Sragen,Jawa Tengah,-7.4264,111.0222,Asia/Jakarta,71522
+Pagar Alam,Sumatera Selatan,-4.0251,103.2469,Asia/Jakarta,70386
+Raha,Sulawesi Tenggara,-4.838,122.7209,Asia/Makassar,69980
+Mertoyudan,Jawa Tengah,-7.52,110.2264,Asia/Jakarta,69871
+Bondowoso,Jawa Timur,-7.9135,113.8214,Asia/Jakarta,69783
+Nganjuk,Jawa Timur,-7.6051,111.9035,Asia/Jakarta,69011
+Tanjung Selor,Kalimantan Utara,2.8375,117.3653,Asia/Makassar,67837
+Melati,DI Yogyakarta,-7.7333,110.3667,Asia/Jakarta,67090
+Nunukan,Kalimantan Utara,4.1384,117.6507,Asia/Makassar,67006
+Sokaraja,Jawa Tengah,-7.4581,109.2881,Asia/Jakarta,66482
+Gamping Lor,DI Yogyakarta,-7.7956,110.3264,Asia/Jakarta,66110
+Wamena,Papua Pegunungan,-4.0958,138.9481,Asia/Jayapura,66080
+Lahat,Sumatera Selatan,-3.7851,103.5428,Asia/Jakarta,65906
+Polewali,Sulawesi Barat,-3.4324,119.3435,Asia/Makassar,65800
+Tulungagung,Jawa Timur,-8.0657,111.9025,Asia/Jakarta,65262
+Ambarawa,Jawa Tengah,-7.2633,110.3975,Asia/Jakarta,65096
+Meulaboh,Aceh,4.144,96.1266,Asia/Jakarta,64646
+Muncar,Jawa Timur,-8.4333,114.3333,Asia/Jakarta,64537
+Bantul,DI Yogyakarta,-7.8881,110.3289,Asia/Jakarta,64360
+Tulangan Utara,Jawa Timur,-7.4737,112.6505,Asia/Jakarta,63889
+Godean,DI Yogyakarta,-7.7697,110.2939,Asia/Jakarta,63164
+Sumbawa Besar,Nusa Tenggara Barat,-8.4932,117.4202,Asia/Makassar,62753
+Abepura,Papua,-2.5964,140.6324,Asia/Jayapura,62248
+Slawi,Jawa Tengah,-6.9816,109.1407,Asia/Jakarta,61206
+Pecangaan,Jawa Tengah,-6.6978,110.7107,Asia/Jakarta,61046
+Kertosono,Jawa Timur,-7.5833,112.1,Asia/Jakarta,60782
+Boyolali,Jawa Tengah,-7.5331,110.5958,Asia/Jakarta,59851
+Sengkang,Sulawesi Selatan,-4.1279,120.0297,Asia/Makassar,59523
+Lamongan,Jawa Timur,-7.1167,112.4167,Asia/Jakarta,59224
+Baki,Jawa Tengah,-7.6128,110.7839,Asia/Jakarta,58909
+Padangpanjang,Sumatera Barat,-0.456,100.4052,Asia/Jakarta,58627
+Weleri,Jawa Tengah,-6.9713,110.0666,Asia/Jakarta,58448
+Jatiwangi,Jawa Barat,-6.7336,108.2628,Asia/Jakarta,57973
+Baekrajan,Jawa Tengah,-6.7674,110.8541,Asia/Jakarta,57920
+Kota Sambas,Kalimantan Barat,1.3626,109.3009,Asia/Pontianak,57295
+Purbalingga,Jawa Tengah,-7.3881,109.3639,Asia/Jakarta,56903
+Balai Pungut,Riau,1.0595,101.2905,Asia/Jakarta,56452
+Mendaha,Jambi,-1.0163,103.5933,Asia/Jakarta,56268
+Sleman,DI Yogyakarta,-7.7156,110.3556,Asia/Jakarta,56215
+Pandak,DI Yogyakarta,-7.9131,110.2936,Asia/Jakarta,56043
+Barabai,Kalimantan Selatan,-2.5833,115.3833,Asia/Makassar,55956
+Amuntai,Kalimantan Selatan,-2.4177,115.2494,Asia/Makassar,55560
+Besuki,Jawa Timur,-7.7338,113.6979,Asia/Jakarta,55465
+Taliwang,Nusa Tenggara Barat,-8.7449,116.8532,Asia/Makassar,55340
+Wedi,Jawa Tengah,-7.7431,110.5794,Asia/Jakarta,55300
+Cepu,Jawa Tengah,-7.1475,111.5906,Asia/Jakarta,55055
+Dompu,Nusa Tenggara Barat,-8.5365,118.4634,Asia/Makassar,54987
+Pemangkat,Kalimantan Barat,1.1667,108.9667,Asia/Pontianak,54259
+Sampang,Jawa Timur,-7.1872,113.2394,Asia/Jakarta,53269
+Tanjungagung,Sumatera Selatan,-3.9373,103.8046,Asia/Jakarta,53117
+Terbanggi Besar,Lampung,-4.879,105.2182,Asia/Jakarta,52566
+Dobo,Maluku,-5.7609,134.234,Asia/Jayapura,52104
+Kepanjen,Jawa Timur,-8.1303,112.5727,Asia/Jakarta,51919
+Blora,Jawa Tengah,-6.9698,111.4186,Asia/Jakarta,51811
+Comal,Jawa Tengah,-6.9053,109.5347,Asia/Jakarta,51092
+Gombong,Jawa Tengah,-7.6072,109.5142,Asia/Jakarta,50950
+Sidikalang,Sumatera Utara,2.749,98.3127,Asia/Jakarta,50671
+Sangkapura,Jawa Timur,-5.8453,112.6517,Asia/Jakarta,50612
+Kawalu,Jawa Barat,-7.3817,108.2082,Asia/Jakarta,50541
+Amahai,Maluku,-3.3398,128.9197,Asia/Jayapura,50478
+Jatiroto,Jawa Tengah,-7.8833,111.1167,Asia/Jakarta,50059
+Labuhan Deli,Sumatera Utara,3.879,98.633,Asia/Jakarta,49668
+Gampengrejo,Jawa Timur,-7.764,112.035,Asia/Jakarta,49118
+Gatak,Jawa Tengah,-7.5908,110.7044,Asia/Jakarta,48959
+Tanjung Balai,Kepulauan Riau,1.0001,103.4219,Asia/Jakarta,48953
+Singaparna,Jawa Barat,-7.3515,108.111,Asia/Jakarta,48882
+Banyumas,Jawa Tengah,-7.5142,109.2942,Asia/Jakarta,48378
+Pameungpeuk,Jawa Barat,-7.0183,107.6039,Asia/Jakarta,48294
+Berastagi,Sumatera Utara,3.1947,98.5089,Asia/Jakarta,48244
+Kefamenanu,Nusa Tenggara Timur,-9.4467,124.4781,Asia/Makassar,48202
+Buduran,Jawa Timur,-7.4281,112.7234,Asia/Jakarta,48152
+Luwuk,Sulawesi Tengah,-0.9516,122.7875,Asia/Makassar,47778
+Sungai Raya,Kalimantan Barat,0.7,108.9,Asia/Pontianak,47735
+Bireun,Aceh,5.203,96.7009,Asia/Jakarta,47670
+Balung,Jawa Timur,-7.7333,113.9167,Asia/Jakarta,47631
+Poso,Sulawesi Tengah,-1.3959,120.7524,Asia/Makassar,47477
+Karanganom,Jawa Tengah,-7.6489,110.625,Asia/Jakarta,47179
+Singkil,Aceh,2.2874,97.7884,Asia/Jakarta,46800
+Muara Teweh,Kalimantan Tengah,-0.9473,114.8962,Asia/Pontianak,46652
+Curup,Bengkulu,-3.4703,102.5207,Asia/Jakarta,46245
+Candi Prambanan,Jawa Tengah,-7.75,110.4942,Asia/Jakarta,44925
+Sentani,Papua,-2.5691,140.5127,Asia/Jayapura,44779
+Bambanglipuro,DI Yogyakarta,-7.95,110.2833,Asia/Jakarta,44713
+Ketanggungan,Jawa Tengah,-6.9383,108.891,Asia/Jakarta,44288
+Rembangan,Jawa Tengah,-6.7036,111.3416,Asia/Jakarta,44030
+Gebog,Jawa Tengah,-6.735,110.8444,Asia/Jakarta,43756
+Sabang,Aceh,5.8897,95.3164,Asia/Jakarta,43527
+Kencong,Jawa Timur,-8.2833,113.3667,Asia/Jakarta,43046
+Panji,Jawa Timur,-7.7253,114.0995,Asia/Jakarta,42789
+Indralaya,Sumatera Selatan,-3.2525,104.6756,Asia/Jakarta,42498
+Baturaden,Jawa Tengah,-7.3,109.2167,Asia/Jakarta,42394
+Kotabumi,Lampung,-4.8251,104.8817,Asia/Jakarta,42366
+Biak,Papua,-1.1767,136.082,Asia/Jayapura,41731
+Diwek,Jawa Timur,-7.579,112.2311,Asia/Jakarta,41719
+Ruteng,Nusa Tenggara Timur,-8.6114,120.4644,Asia/Makassar,41533
+Sinjai,Sulawesi Selatan,-5.1241,120.253,Asia/Makassar,40797
+Rantepao,Sulawesi Selatan,-2.9701,119.8978,Asia/Makassar,40438
+Reuleuet,Aceh,5.2167,96.2833,Asia/Jakarta,40393
+Soe,Nusa Tenggara Timur,-9.8607,124.284,Asia/Makassar,40190
+Juwana,Jawa Tengah,-6.715,111.1514,Asia/Jakarta,40177
+Pekan Bahapal,Sumatera Utara,3.1131,99.1735,Asia/Jakarta,40000
+Rajapolah,Jawa Barat,-7.221,108.1896,Asia/Jakarta,39840
+Benoa,Bali,-8.7548,115.2184,Asia/Makassar,39570
+Tarutung,Sumatera Utara,2.0147,98.9655,Asia/Jakarta,39500
+Wiradesa,Jawa Tengah,-6.8922,109.619,Asia/Jakarta,39407
+Manggar,Kepulauan Bangka Belitung,-2.8833,108.2667,Asia/Jakarta,39135
+Majenang,Jawa Tengah,-7.2975,108.7642,Asia/Jakarta,38897
+Buaran,Jawa Tengah,-7.05,109.55,Asia/Jakarta,38770
+Krian,Jawa Timur,-7.4104,112.5792,Asia/Jakarta,38603
+Wonopringgo,Jawa Tengah,-6.9833,109.6167,Asia/Jakarta,38429
+Masamba,Sulawesi Selatan,-2.5537,120.3279,Asia/Makassar,38024
+Namlea,Maluku,-3.2619,127.0929,Asia/Jayapura,37869
+Jekulo,Jawa Tengah,-6.8057,110.9262,Asia/Jakarta,37521
+Karangnongko,Jawa Tengah,-7.7956,110.5867,Asia/Jakarta,37420
+Tanjung,Kalimantan Selatan,-2.1709,115.4077,Asia/Makassar,37291
+Simpang,Jambi,-1.2642,104.097,Asia/Jakarta,36652
+Masohi,Maluku,-3.2983,128.9688,Asia/Jayapura,36433
+Srono,Jawa Timur,-8.4,114.2666,Asia/Jakarta,36260
+Waingapu,Nusa Tenggara Timur,-9.6567,120.2641,Asia/Makassar,35932
+Mulia,Papua Tengah,-3.7147,137.9853,Asia/Jayapura,35884
+Tambolaka,Nusa Tenggara Timur,-9.4283,119.238,Asia/Makassar,35790
+Kualakapuas,Kalimantan Tengah,-3.0091,114.3876,Asia/Jakarta,35632
+Wangon,Jawa Tengah,-7.5161,109.0539,Asia/Jakarta,35530
+Tahuna,Sulawesi Utara,3.611,125.4858,Asia/Makassar,35307
+Sumberpucung,Jawa Timur,-8.1586,112.4829,Asia/Jakarta,35285
+Praya,Nusa Tenggara Barat,-8.7054,116.2704,Asia/Makassar,35183
+Pangururan,Sumatera Utara,2.6081,98.6961,Asia/Jakarta,34209
+Pandaan,Jawa Timur,-7.6527,112.6875,Asia/Jakarta,34184
+Tobelo,Maluku Utara,1.7284,128.0095,Asia/Jayapura,34150
+Kuala Tungkal,Jambi,-0.8162,103.4611,Asia/Jakarta,33683
+Tabanan,Bali,-8.5413,115.1252,Asia/Makassar,33667
+Lebaksiu,Jawa Tengah,-7.0496,109.1441,Asia/Jakarta,33606
+Labuan,Banten,-6.3784,105.83,Asia/Jakarta,33576
+Mlonggo,Jawa Tengah,-6.5333,110.7,Asia/Jakarta,33542
+Bengkayang,Kalimantan Barat,0.8319,109.4359,Asia/Pontianak,33385
+Tondano,Sulawesi Utara,1.3054,124.9126,Asia/Makassar,33317
+Tanggulangin,Jawa Timur,-7.4996,112.6999,Asia/Jakarta,32866
+Jaten,Jawa Tengah,-7.5772,110.8975,Asia/Jakarta,32378
+Boyolangu,Jawa Timur,-8.1181,111.8935,Asia/Jakarta,32287
+Katobu,Sulawesi Tenggara,-4.8299,122.726,Asia/Makassar,31929
+Amlapura,Bali,-8.45,115.6167,Asia/Makassar,31869
+Amlapura city,Bali,-8.4487,115.6062,Asia/Makassar,31869
+Airmadidi,Sulawesi Utara,1.428,124.9777,Asia/Makassar,31446
+Bandar,Sumatera Utara,2.05,99.75,Asia/Jakarta,31442
+Kutoarjo,Jawa Tengah,-7.7169,109.9128,Asia/Jakarta,31352
+Karangampel,Jawa Barat,-6.4622,108.4519,Asia/Jakarta,31234
+Panarukan,Jawa Timur,-7.7018,113.9184,Asia/Jakarta,30749
+Sidareja,Jawa Tengah,-7.4846,108.7923,Asia/Jakarta,30313
+Dalung,Bali,-8.6255,115.1704,Asia/Makassar,30228
+Pakisaji,Jawa Timur,-8.0665,112.5981,Asia/Jakarta,30213
+Selogiri,Jawa Tengah,-7.7833,110.8667,Asia/Jakarta,30180
+Lewoleba,Nusa Tenggara Timur,-8.3723,123.418,Asia/Makassar,30151
+Kuta,Bali,-8.7233,115.1723,Asia/Makassar,30012
+Maros,Sulawesi Selatan,-5.006,119.5727,Asia/Makassar,30000
+Sanana,Maluku Utara,-2.0585,125.9779,Asia/Jayapura,29716
+Kawasi,Maluku Utara,-1.5912,127.4071,Asia/Jayapura,29642
+Srandakan,DI Yogyakarta,-7.9386,110.2506,Asia/Jakarta,29529
+Singojuruh,Jawa Timur,-8.3167,114.2333,Asia/Jakarta,29418
+Wongsorejo,Jawa Timur,-7.9908,114.4009,Asia/Jakarta,29193
+Trenggalek,Jawa Timur,-8.0764,111.7064,Asia/Jakarta,29083
+Lasem,Jawa Tengah,-6.6922,111.4527,Asia/Jakarta,28948
+Utan,DKI Jakarta,-6.1769,106.9467,Asia/Jakarta,28745
+Ceper,Jawa Tengah,-7.6742,110.6789,Asia/Jakarta,28646
+Randudongkal,Jawa Tengah,-7.0981,109.3243,Asia/Jakarta,28532
+Balapulang,Jawa Tengah,-7.0486,109.1006,Asia/Jakarta,28483
+Kraksaan,Jawa Timur,-7.7584,113.3962,Asia/Jakarta,28248
+Batubulan,Bali,-8.6238,115.262,Asia/Makassar,28131
+Jogonalan,Jawa Tengah,-7.7036,110.5361,Asia/Jakarta,28114
+Mranggen,Jawa Tengah,-7.0268,110.5158,Asia/Jakarta,28026
+Deli Tua,Sumatera Utara,3.5078,98.6839,Asia/Jakarta,27940
+Margasari,Jawa Tengah,-7.0948,109.025,Asia/Jakarta,27814
+Sijunjung,Sumatera Barat,-0.7005,100.9774,Asia/Jakarta,27786
+Tomohon,Sulawesi Utara,1.3168,124.8038,Asia/Makassar,27624
+Sofifi,Maluku Utara,0.7373,127.5588,Asia/Jayapura,27591
+Bulakamba,Jawa Tengah,-6.8748,108.9559,Asia/Jakarta,27367
+Demak,Jawa Tengah,-6.8909,110.6396,Asia/Jakarta,27251
+Paciran,Jawa Timur,-6.8767,112.3761,Asia/Jakarta,27072
+Babat,Jawa Timur,-7.1128,112.1635,Asia/Jakarta,27038
+Stabat,Sumatera Utara,3.7334,98.4502,Asia/Jakarta,26862
+Driyorejo,Jawa Timur,-7.3659,112.6219,Asia/Jakarta,26827
+Muntok,Kepulauan Bangka Belitung,-2.0672,105.1623,Asia/Jakarta,26709
+Tayu,Jawa Tengah,-6.5397,111.0518,Asia/Jakarta,26413
+Ngunut,Jawa Timur,-8.1058,112.0159,Asia/Jakarta,26297
+Colomadu,Jawa Tengah,-7.5333,110.75,Asia/Jakarta,26274
+Wanaraja,Jawa Barat,-7.1749,107.9808,Asia/Jakarta,26240
+Welahan,Jawa Tengah,-6.8,110.7167,Asia/Jakarta,26163
+Teluk Dalam,Sumatera Utara,0.5729,97.8034,Asia/Jakarta,25780
+Malinau,Kalimantan Utara,3.5886,116.6239,Asia/Makassar,25596
+Pangkalan Brandan,Sumatera Utara,4.0238,98.2782,Asia/Jakarta,25542
+Soko,Jawa Timur,-7.4832,112.427,Asia/Jakarta,25494
+Bungku,Sulawesi Tengah,-2.5471,121.972,Asia/Makassar,25477
+Teluk Nibung,Sumatera Utara,3.001,99.8164,Asia/Jakarta,25146
+Tanjungtiram,Sumatera Utara,4.0613,98.3699,Asia/Jakarta,25118
+Seririt,Bali,-8.1928,114.9388,Asia/Makassar,25000
+Bintuni,Papua Barat,-2.1097,133.5246,Asia/Jayapura,24742
+Lahewa,Sumatera Utara,1.3943,97.1675,Asia/Jakarta,24485
+Delanggu,Jawa Tengah,-7.6167,110.6833,Asia/Jakarta,24440
+Prigen,Jawa Timur,-7.6833,112.6167,Asia/Jakarta,24164
+Blangpidie,Aceh,3.7396,96.8361,Asia/Jakarta,24085
+Pundong,DI Yogyakarta,-7.9522,110.3486,Asia/Jakarta,24081
+Kalianget,Jawa Timur,-7.0537,113.9424,Asia/Jakarta,23897
+Agats,Papua Selatan,-5.545,138.1352,Asia/Jayapura,23869
+Ngemplak,Jawa Tengah,-7.5497,110.7164,Asia/Jakarta,23750
+Trucuk,Jawa Tengah,-7.7183,110.6589,Asia/Jakarta,23584
+Daruba,Maluku Utara,2.0505,128.294,Asia/Jayapura,23566
+Mojoagung,Jawa Timur,-7.5667,112.35,Asia/Jakarta,23534
+Kroya,Jawa Tengah,-7.6331,109.2461,Asia/Jakarta,23255
+Dampit,Jawa Timur,-8.2116,112.7493,Asia/Jakarta,23094
+Tuban,Bali,-8.7427,115.1724,Asia/Makassar,22947
+Ngoro,Jawa Timur,-7.6839,112.258,Asia/Jakarta,22871
+Waisai,Papua Barat Daya,-0.2379,130.5072,Asia/Jayapura,22541
+Gambiran Satu,Jawa Timur,-8.3939,114.1464,Asia/Jakarta,22525
+Kamal,Jawa Timur,-7.1678,112.7192,Asia/Jakarta,22515
+Gongdanglegi Kulon,Jawa Timur,-8.1753,112.6359,Asia/Jakarta,22468
+Ngawi,Jawa Timur,-7.4038,111.4461,Asia/Jakarta,22412
+Kebonarun,Jawa Tengah,-7.7003,110.5631,Asia/Jakarta,21745
+Namrole,Maluku,-3.8455,126.7262,Asia/Jayapura,21513
+Tiom,Papua Pegunungan,-3.9236,138.4547,Asia/Jayapura,21324
+Muara Bungo,Jambi,-1.4902,102.1149,Asia/Jakarta,21243
+Bedugul,Bali,-8.4504,115.5925,Asia/Makassar,20000
+Teminabuan,Papua Barat Daya,-1.4416,132.0143,Asia/Jayapura,19491
+Kalabahi,Nusa Tenggara Timur,-8.2151,124.5458,Asia/Makassar,19210
+Fakfak,Papua,-2.9248,132.2981,Asia/Jayapura,18900
+Manismata,Kalimantan Barat,-2.4667,111.0333,Asia/Pontianak,18888
+Barus,Sumatera Utara,2.0106,98.3982,Asia/Jakarta,18346
+Sigli,Aceh,5.3848,95.9609,Asia/Jakarta,17504
+Ransiki,Papua Barat,-1.5083,134.1708,Asia/Jayapura,16245
+Paropo,Sumatera Utara,2.8663,98.5211,Asia/Jakarta,16065
+Tongging,Sumatera Utara,2.8985,98.5231,Asia/Jakarta,16000
+Leuwiliang,Jawa Barat,-7.1169,107.5019,Asia/Jakarta,15275
+Mamuju,Sulawesi Barat,-2.6806,118.8861,Asia/Makassar,15000
+Sinabang,Aceh,2.4803,96.3801,Asia/Jakarta,15000
+Sanur,Bali,-8.675,115.2611,Asia/Makassar,14628
+Sarmi,Papua,-1.853,138.7509,Asia/Jayapura,14093
+Serui,Papua,-1.8802,136.2426,Asia/Jayapura,13568
+Kobakma,Papua Pegunungan,-3.6642,139.065,Asia/Jayapura,13062
+Parmonangan,Sumatera Utara,2.397,99.0515,Asia/Jakarta,13021
+Saumlaki,Maluku,-7.9862,131.2968,Asia/Jayapura,12916
+Maba,Maluku Utara,0.7007,128.292,Asia/Jayapura,12560
+Nainggolan,Sumatera Utara,2.4361,98.8852,Asia/Jakarta,11849
+Dabo,Kepulauan Riau,-0.4931,104.5631,Asia/Jakarta,10388
+Labuan Lombok,Nusa Tenggara Barat,-8.5,116.6667,Asia/Makassar,10000
+Legian,Bali,-8.7042,115.1703,Asia/Makassar,10000
+Lembar,Nusa Tenggara Barat,-8.7264,116.0744,Asia/Makassar,10000
+Lovina,Bali,-8.1493,115.04,Asia/Makassar,10000
+Parapat,Sumatera Utara,2.663,98.9349,Asia/Jakarta,10000
+Tomok Bolon,Sumatera Utara,2.6521,98.8608,Asia/Jakarta,10000
+Galela,Maluku Utara,1.8234,127.7889,Asia/Jayapura,8760
+Ranai Kota,Kepulauan Riau,3.94,108.3777,Asia/Pontianak,8735
+Kepi,Papua Selatan,-6.5246,139.3222,Asia/Jayapura,8394
+"Laikit, Laikit II (Dimembe)",Sulawesi Utara,1.4883,124.9744,Asia/Makassar,8000
+Bejubang Dua,Jambi,-1.7923,103.3167,Asia/Jakarta,7957
+Sukasada,Bali,-8.1395,115.1031,Asia/Makassar,7817
+Klakah,Jawa Timur,-7.9958,113.2534,Asia/Jakarta,7583
+Labuha,Maluku Utara,-0.6255,127.4781,Asia/Jayapura,7073
+Kuala Cenaku,Riau,-0.4708,102.6827,Asia/Jakarta,7000
+Jimbaran,DI Yogyakarta,-7.95,110.7667,Asia/Jakarta,6778
+Karubaga,Papua Pegunungan,-3.6994,138.4579,Asia/Jayapura,6703
+Kenyam,Papua Pegunungan,-4.5997,138.3842,Asia/Jayapura,6394
+Pabean,Bali,-8.6502,115.2392,Asia/Makassar,6212
+Munduk,Bali,-8.2687,115.0795,Asia/Makassar,6200
+Elelim,Papua Pegunungan,-3.759,139.7075,Asia/Jayapura,5946
+Tobong,Kepulauan Riau,3.2906,106.2905,Asia/Jakarta,5828
+Tuapejat,Sumatera Barat,-2.0283,99.5894,Asia/Jakarta,5756
+Tiakur,Maluku,-8.15,127.795,Asia/Jayapura,5227
